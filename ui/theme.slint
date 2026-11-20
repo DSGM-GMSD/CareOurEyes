@@ -1,0 +1,99 @@
+// Colores, medidas y textos compartidos por toda la interfaz.
+// Modo oscuro: la paleta de la versión Kotlin. Modo claro: la del rediseño en HTML.
+// Las dos con el color de acento elegido.
+
+export global Theme {
+    // Lo fija Rust a partir de config.json (themeMode "dark"/"light"/"system").
+    in-out property <bool> dark: true;
+    // 0 esmeralda, 1 cian, 2 azul, 3 índigo, 4 violeta, 5 ámbar, 6 rosa.
+    in-out property <int> accent: 0;
+
+    out property <[color]> accent-primary: [#1ED788, #06B6D4, #3B82F6, #6366F1, #8B5CF6, #F59E0B, #F43F5E];
+    out property <[color]> accent-dark: [#10B981, #0891B2, #2563EB, #4F46E5, #7C3AED, #D97706, #E11D48];
+    out property <[color]> accent-light: [#6EE7B7, #67E8F9, #93C5FD, #A5B4FC, #C4B5FD, #FCD34D, #FDA4AF];
+    // Tono «600» de cada acento: el color de acento en modo claro.
+    out property <[color]> accent-600: [#10B981, #0891B2, #2563EB, #4F46E5, #7C3AED, #D97706, #E11D48];
+    // Degradado de la barra de brillo (4 paradas por acento).
+    // Esmeralda: el degradado del rediseño HTML (#065F46 → #059669 → #10B981 → #6EE7B7).
+    out property <[color]> b0: [#065F46, #0E2F38, #172554, #1E1B4B, #2E1065, #451A03, #4C0519];
+    out property <[color]> b1: [#059669, #0E7490, #1D4ED8, #4338CA, #6D28D9, #B45309, #BE123C];
+    out property <[color]> b2: [#10B981, #22D3EE, #60A5FA, #818CF8, #A78BFA, #FBBF24, #FB7185];
+    out property <[color]> b3: [#6EE7B7, #A5F3FC, #BFDBFE, #C7D2FE, #DDD6FE, #FDE68A, #FECDD3];
+
+    // Superficies. Claro: barra de título y lateral #F8FAFC, fondo #F4F6F9,
+    // tarjetas blancas, «pozos» (paneles internos y botones) #F8FAFC.
+    out property <color> o950: dark ? #070A0D : #F8FAFC;
+    out property <color> o900: dark ? #0B0F13 : #F4F6F9;
+    out property <color> o850: dark ? #0E141A : #F8FAFC;
+    out property <color> o800: dark ? #11171E : #FFFFFF;
+    out property <color> o750: dark ? #151D26 : #F1F5F9;
+    out property <color> o700: dark ? #18202A : #F8FAFC;
+    out property <color> o600: dark ? #212C3A : #CBD5E1;
+    // Fondo de menús desplegables y diálogos.
+    out property <color> menu: dark ? #151D26 : #FFFFFF;
+    // Opción del menú bajo el ratón (claro: negro al 3 %, como en el HTML).
+    out property <color> menu-hover: dark ? #212C3A : #00000008;
+    out property <color> popup-shadow: dark ? #00000066 : #0F172A24;
+    // Sombra de las tarjetas (solo en modo claro, como en el HTML).
+    out property <color> card-shadow: dark ? transparent : #0F172A0D;
+
+    // «Emerald» = el color de acento elegido.
+    out property <color> e450: dark ? accent-primary[accent] : accent-600[accent];
+    out property <color> e500: accent-dark[accent];
+    out property <color> e400: dark ? accent-primary[accent] : accent-600[accent];
+    out property <color> e300: dark ? accent-light[accent] : accent-600[accent];
+
+    out property <color> s200: dark ? #E2E8F0 : #0F172A;
+    out property <color> s300: dark ? #CBD5E1 : #475569;
+    out property <color> s400: dark ? #94A3B8 : #64748B;
+    out property <color> s500: #64748B;
+
+    out property <color> amber200: dark ? #FDE68A : #B45309;
+    // Ámbar («Noche»): en modo claro, el del rediseño HTML (#D97706, más luminoso).
+    out property <color> amber300: dark ? #FCD34D : #D97706;
+    out property <color> orange400: dark ? #FB923C : #EA580C;
+    out property <color> rose500: dark ? #F43F5E : #E11D48;
+    out property <color> error: dark ? #FF6B6B : #DC2626;
+
+    out property <color> border-faint: dark ? #ffffff0d : #E2E8F0;
+    out property <color> border-soft: dark ? #ffffff12 : #E2E8F0;
+    out property <color> border-mid: dark ? #ffffff1a : #0000002e;
+    out property <color> border-strong: dark ? #ffffff26 : #00000040;
+    out property <color> tint: e450.with-alpha(dark ? 0.14 : 0.08);
+    out property <color> tint-border: e450.with-alpha(dark ? 0.45 : 0.35);
+    // Blanco o negro muy tenue para los fondos «hover».
+    out property <color> ink: dark ? #ffffff : #000000;
+    // Velos de «hover» y «pressed».
+    // En modo claro el velo es casi imperceptible: lo que se nota es el borde de
+    // color (hover-border), como en el HTML.
+    out property <color> hover: dark ? #ffffff17 : #0F172A05;
+    out property <color> press: dark ? #ffffff24 : #0F172A0D;
+    out property <color> hover-border: dark ? border-strong : e450.with-alpha(0.35);
+
+    out property <length> card-radius: 16px;
+    out property <length> gap: 14px;
+    out property <length> page-pad: 20px;
+    out property <length> sidebar: 232px;
+    out property <length> title-bar: 40px;
+
+    out property <string> mono: "JetBrains Mono";
+}
+
+// Textos traducidos. Rust conecta `lookup` y luego sube `rev` para que todas las
+// etiquetas se vuelvan a evaluar.
+export global T {
+    in property <int> rev: 0;
+    pure callback lookup(string) -> string;
+    pure callback lookup1(string, string) -> string;
+    pure callback lookup2(string, string, string) -> string;
+
+    public pure function tr(key: string) -> string {
+        return rev >= 0 ? lookup(key) : key;
+    }
+    public pure function tr1(key: string, a: string) -> string {
+        return rev >= 0 ? lookup1(key, a) : key;
+    }
+    public pure function tr2(key: string, a: string, b: string) -> string {
+        return rev >= 0 ? lookup2(key, a, b) : key;
+    }
+}

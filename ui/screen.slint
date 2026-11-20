@@ -1,0 +1,607 @@
+// Página «Pantalla»: monitor, perfiles, brillo, temperatura y Auto Día/Noche.
+// Clon de ScreenPage.kt.
+
+import { Theme, T } from "theme.slint";
+import { Icons } from "icons.slint";
+import { App, MonitorItem } from "state.slint";
+import { Icon, IconBox, CareCard, CareButton, StepButton, CareSwitch, Badge, GradientSlider, InfoCard } from "widgets.slint";
+
+struct ModeEntry {
+    key: string,
+    icon: string,
+}
+
+// Selector de monitor con su menú.
+component MonitorSelector inherits Rectangle {
+    property <MonitorItem> current: App.monitors[App.selected];
+    horizontal-stretch: 0;
+    border-radius: 12px;
+    background: ta.has-hover ? Theme.o750 : Theme.o800;
+    border-width: 1px;
+    border-color: ta.has-hover ? Theme.hover-border : Theme.border-soft;
+    HorizontalLayout {
+        padding-left: 14px;
+        padding-right: 14px;
+        padding-top: 8px;
+        padding-bottom: 8px;
+        spacing: 10px;
+        Rectangle {
+            y: (parent.height - 8px) / 2;
+            width: 8px;
+            height: 8px;
+            border-radius: 4px;
+            background: Theme.e450;
+        }
+        Text {
+            text: root.current.name;
+            font-size: 13px;
+            font-weight: 600;
+            color: Theme.s200;
+            vertical-alignment: center;
+        }
+        VerticalLayout {
+            alignment: center;
+            Badge {
+                text: root.current.width + "×" + root.current.height;
+                mono: true;
+            }
+        }
+        Icon {
+            y: (parent.height - self.height) / 2;
+            commands: Icons.expand-more;
+            size: 16px;
+            tint: Theme.s400;
+        }
+    }
+    // Velo al pasar el ratón / pulsar (como el efecto de Compose en la versión Kotlin).
+    Rectangle {
+        border-radius: root.border-radius;
+        background: ta.pressed ? Theme.press : ta.has-hover ? Theme.hover : transparent;
+        animate background { duration: 120ms; }
+    }
+    ta := TouchArea {
+        mouse-cursor: pointer;
+        clicked => { menu.show(); }
+    }
+    menu := PopupWindow {
+        x: 0;
+        y: root.height + 4px;
+        width: 300px;
+        Rectangle {
+            background: Theme.menu;
+            border-radius: 10px;
+            border-width: 1px;
+            border-color: Theme.border-mid;
+            drop-shadow-blur: 12px;
+            drop-shadow-color: Theme.popup-shadow;
+            VerticalLayout {
+                padding: 6px;
+                for m[i] in App.monitors: Rectangle {
+                    border-radius: 8px;
+                    background: i == App.selected && !Theme.dark ? Theme.tint : ita.has-hover ? Theme.menu-hover : transparent;
+                    border-width: 1px;
+                    border-color: i == App.selected && !Theme.dark ? Theme.tint-border : transparent;
+                    HorizontalLayout {
+                        padding: 10px;
+                        spacing: 8px;
+                        VerticalLayout {
+                            horizontal-stretch: 1;
+                            Text {
+                                text: m.name;
+                                font-size: 12px;
+                                font-weight: 600;
+                                color: i == App.selected ? Theme.s200 : Theme.s300;
+                            }
+                            Text {
+                                text: m.width + " × " + m.height + (m.primary ? T.tr("sufijo_principal") : "");
+                                font-size: 11px;
+                                color: Theme.s400;
+                            }
+                        }
+                        if i == App.selected: Icon {
+                            y: (parent.height - self.height) / 2;
+                            commands: Icons.check;
+                            size: 16px;
+                            tint: Theme.e450;
+                        }
+                    }
+                    ita := TouchArea {
+                        mouse-cursor: pointer;
+                        clicked => {
+                            App.select-monitor(i);
+                            menu.close();
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+// Píldora con el motor activo.
+component StatusPill inherits Rectangle {
+    in property <string> text;
+    horizontal-stretch: 0;
+    border-radius: self.height / 2;
+    background: Theme.e500.with-alpha(0.08);
+    border-width: 1px;
+    border-color: Theme.e450.with-alpha(0.25);
+    HorizontalLayout {
+        padding-left: 14px;
+        padding-right: 14px;
+        padding-top: 7px;
+        padding-bottom: 7px;
+        Text {
+            text: root.text;
+            font-size: 12px;
+            font-weight: 500;
+            color: Theme.e300;
+            vertical-alignment: center;
+        }
+    }
+}
+
+component ProfileButton inherits Rectangle {
+    in property <string> label;
+    in property <string> icon;
+    in property <bool> selected;
+    callback clicked;
+    height: 40px;
+    // Mismo ancho preferido en todos: la fila los reparte por igual.
+    preferred-width: 100px;
+    min-width: 60px;
+    border-radius: 12px;
+    background: selected ? @linear-gradient(180deg, Theme.e450.with-alpha(0.14) 0%, Theme.e500.with-alpha(0.06) 100%)
+        : ta.has-hover ? Theme.o700 : Theme.o700.with-alpha(0.6);
+    border-width: 1px;
+    border-color: selected ? Theme.e450.with-alpha(0.55) : ta.has-hover ? Theme.hover-border : Theme.border-soft;
+    HorizontalLayout {
+        padding-left: 12px;
+        padding-right: 12px;
+        spacing: 10px;
+        Icon {
+            y: (parent.height - self.height) / 2;
+            commands: root.icon;
+            size: 16px;
+            tint: root.selected ? Theme.e450 : ta.has-hover ? Theme.s200 : Theme.s400;
+        }
+        Text {
+            horizontal-stretch: 1;
+            text: root.label;
+            font-size: 12px;
+            font-weight: root.selected ? 600 : 500;
+            color: root.selected ? Theme.e450 : ta.has-hover ? Theme.s200 : Theme.s300;
+            vertical-alignment: center;
+            overflow: elide;
+        }
+    }
+    // Velo al pasar el ratón / pulsar (como el efecto de Compose en la versión Kotlin).
+    Rectangle {
+        border-radius: root.border-radius;
+        background: ta.pressed ? Theme.press : ta.has-hover ? Theme.hover : transparent;
+        animate background { duration: 120ms; }
+    }
+    ta := TouchArea {
+        mouse-cursor: pointer;
+        clicked => { root.clicked(); }
+    }
+}
+
+// Panel interior de brillo / temperatura: icono, texto, − lectura +, y la barra.
+component SliderPanel inherits Rectangle {
+    in property <string> icon;
+    in property <color> icon-tint;
+    in property <string> title;
+    in property <string> hint;
+    in property <string> readout;
+    in property <color> readout-color;
+    in property <length> readout-width;
+    callback minus;
+    callback plus;
+    border-radius: 12px;
+    background: Theme.o850.with-alpha(0.75);
+    border-width: 1px;
+    border-color: Theme.border-faint;
+    VerticalLayout {
+        padding-left: 14px;
+        padding-right: 14px;
+        padding-top: 12px;
+        padding-bottom: 12px;
+        spacing: 8px;
+        HorizontalLayout {
+            spacing: 0px;
+            IconBox {
+                icon: root.icon;
+                size: 36px;
+                tint: root.icon-tint;
+            }
+            Rectangle { width: 12px; }
+            VerticalLayout {
+                horizontal-stretch: 1;
+                alignment: center;
+                Text {
+                    text: root.title;
+                    font-size: 14px;
+                    font-weight: 600;
+                    color: Theme.s200;
+                }
+                Text {
+                    text: root.hint;
+                    font-size: 12px;
+                    color: Theme.s400;
+                    overflow: elide;
+                }
+            }
+            VerticalLayout {
+                alignment: center;
+                StepButton {
+                    icon: Icons.remove;
+                    clicked => { root.minus(); }
+                }
+            }
+            Text {
+                width: root.readout-width;
+                text: root.readout;
+                font-size: 16px;
+                font-weight: 700;
+                font-family: Theme.mono;
+                color: root.readout-color;
+                horizontal-alignment: center;
+                vertical-alignment: center;
+            }
+            VerticalLayout {
+                alignment: center;
+                StepButton {
+                    icon: Icons.add;
+                    clicked => { root.plus(); }
+                }
+            }
+        }
+        @children
+    }
+}
+
+component SegmentButton inherits Rectangle {
+    in property <string> text;
+    in property <string> icon;
+    in property <bool> selected;
+    in property <color> accent;
+    callback clicked;
+    height: 28px;
+    horizontal-stretch: 0;
+    border-radius: 8px;
+    background: selected ? accent.with-alpha(0.15) : transparent;
+    border-width: 1px;
+    border-color: selected ? accent.with-alpha(0.35) : transparent;
+    HorizontalLayout {
+        padding-left: 12px;
+        padding-right: 12px;
+        spacing: 6px;
+        Icon {
+            y: (parent.height - self.height) / 2;
+            commands: root.icon;
+            size: 14px;
+            tint: root.selected ? root.accent : Theme.s400;
+        }
+        Text {
+            text: root.text;
+            font-size: 12px;
+            font-weight: root.selected ? 600 : 500;
+            color: root.selected ? root.accent : Theme.s400;
+            vertical-alignment: center;
+        }
+    }
+    TouchArea {
+        mouse-cursor: pointer;
+        clicked => { root.clicked(); }
+    }
+}
+
+component AutoDayNight inherits CareCard {
+    pad: 16px;
+    gap: 0px;
+    property <color> pc: App.editing-night ? Theme.amber300 : Theme.e450;
+    border-color: App.previewing ? root.pc.with-alpha(0.55) : Theme.border-soft;
+    HorizontalLayout {
+        IconBox {
+            icon: App.previewing ? (App.editing-night ? Icons.dark-mode : Icons.light-mode) : Icons.nights-stay;
+            size: 40px;
+            tint: App.previewing ? root.pc : App.schedule-on ? Theme.e450 : Theme.s500;
+            fill: App.previewing ? root.pc.with-alpha(0.12) : Theme.o700;
+        }
+        Rectangle { width: 14px; }
+        VerticalLayout {
+            horizontal-stretch: 1;
+            alignment: center;
+            HorizontalLayout {
+                spacing: 8px;
+                alignment: start;
+                Text {
+                    // En vista previa el título dice qué periodo se está editando.
+                    text: App.previewing ? (App.editing-night ? T.tr("rs_editando_noche") : T.tr("rs_editando_dia")) : T.tr("auto_dia_noche");
+                    font-size: 14px;
+                    font-weight: 600;
+                    color: App.previewing ? root.pc : Theme.s200;
+                    vertical-alignment: center;
+                }
+                if !App.previewing && App.schedule-on && App.schedule-range != "": VerticalLayout {
+                    alignment: center;
+                    Badge {
+                        text: App.schedule-range;
+                        mono: true;
+                        ink: Theme.s400;
+                    }
+                }
+            }
+            Text {
+                text: App.previewing ? App.preview-text : T.tr("cambia_sola_segun_la_hora");
+                font-size: 12px;
+                color: App.previewing ? Theme.s300 : Theme.s400;
+                wrap: word-wrap;
+            }
+        }
+        if App.schedule-on: VerticalLayout {
+            alignment: center;
+            Rectangle {
+                border-radius: 12px;
+                background: Theme.o900;
+                border-width: 1px;
+                border-color: Theme.border-soft;
+                HorizontalLayout {
+                    padding: 4px;
+                    spacing: 2px;
+                    SegmentButton {
+                        text: T.tr("dia");
+                        icon: Icons.light-mode;
+                        selected: !App.editing-night;
+                        accent: Theme.e450;
+                        clicked => {
+                            App.editing-night = false;
+                            App.refresh();
+                        }
+                    }
+                    SegmentButton {
+                        text: T.tr("noche");
+                        icon: Icons.dark-mode;
+                        selected: App.editing-night;
+                        accent: Theme.amber300;
+                        clicked => {
+                            App.editing-night = true;
+                            App.refresh();
+                        }
+                    }
+                }
+            }
+        }
+        if App.schedule-on: Rectangle { width: 10px; }
+        // En vista previa, «Listo» ocupa el lugar de Ajustes y del interruptor.
+        if App.previewing: VerticalLayout {
+            alignment: center;
+            CareButton {
+                text: T.tr("rs_listo");
+                clicked => { App.end-preview(); }
+            }
+        }
+        if !App.previewing: VerticalLayout {
+            alignment: center;
+            CareButton {
+                text: T.tr("ajustes");
+                clicked => { App.open-dialog(); }
+            }
+        }
+        if !App.previewing: Rectangle { width: 10px; }
+        if !App.previewing: VerticalLayout {
+            alignment: center;
+            CareSwitch {
+                checked: App.schedule-on;
+                toggled(on) => { App.set-schedule(on); }
+            }
+        }
+    }
+}
+
+export component ScreenPage inherits VerticalLayout {
+    property <[ModeEntry]> modes: [
+        { key: "lectura", icon: Icons.menu-book },
+        { key: "edicion", icon: Icons.edit },
+        { key: "juego", icon: Icons.sports-esports },
+        { key: "pelicula", icon: Icons.movie },
+        { key: "salud_visual", icon: Icons.favorite },
+        { key: "oficina", icon: Icons.work },
+        { key: "personalizado", icon: Icons.tune },
+        { key: "pausa", icon: Icons.pause-circle },
+    ];
+    property <bool> night-side: App.schedule-on && App.editing-night && App.mode != 7;
+    property <MonitorItem> current: App.monitors[App.selected];
+
+    pure function kelvin-key(k: int) -> string {
+        return k <= 2500 ? "muy_calido" : k <= 4000 ? "calido" : k <= 5500 ? "temp_suave" : k <= 7000 ? "neutro" : k <= 9000 ? "frio" : "muy_frio";
+    }
+
+    spacing: 12px;
+    alignment: start;
+
+    if App.monitors.length == 0: VerticalLayout {
+        spacing: 12px;
+        HorizontalLayout {
+            alignment: end;
+            StatusPill { text: App.engine; }
+        }
+        InfoCard {
+            title: T.tr("sin_monitores_detectados");
+            body: T.tr("conecta_una_pantalla_y_pulsa_actualizar");
+        }
+        HorizontalLayout {
+            alignment: start;
+            CareButton {
+                text: T.tr("actualizar");
+                icon: Icons.restart-alt;
+                clicked => { App.refresh-monitors(); }
+            }
+        }
+    }
+
+    if App.monitors.length > 0: VerticalLayout {
+        spacing: 12px;
+
+        // Selector de monitor y estado del motor.
+        HorizontalLayout {
+            MonitorSelector { }
+            Rectangle { horizontal-stretch: 1; }
+            VerticalLayout {
+                alignment: center;
+                StatusPill { text: App.engine; }
+            }
+        }
+
+        // Tarjeta 1: monitor y perfiles.
+        CareCard {
+            pad: 16px;
+            gap: 0px;
+            HorizontalLayout {
+                IconBox {
+                    icon: Icons.desktop-windows;
+                    size: 44px;
+                    tint: Theme.e450;
+                }
+                Rectangle { width: 14px; }
+                VerticalLayout {
+                    horizontal-stretch: 1;
+                    alignment: center;
+                    HorizontalLayout {
+                        spacing: 8px;
+                        alignment: start;
+                        Text {
+                            text: root.current.name;
+                            font-size: 16px;
+                            font-weight: 700;
+                            color: Theme.s200;
+                            overflow: elide;
+                            vertical-alignment: center;
+                        }
+                        VerticalLayout {
+                            alignment: center;
+                            Badge {
+                                text: App.supports-gamma ? T.tr("activo") : T.tr("sin_gamma");
+                                ink: App.supports-gamma ? Theme.e400 : Theme.amber300;
+                                fill: App.supports-gamma ? Theme.e500.with-alpha(0.10) : Theme.amber300.with-alpha(0.10);
+                                line: App.supports-gamma ? Theme.e500.with-alpha(0.20) : Theme.amber300.with-alpha(0.20);
+                            }
+                        }
+                    }
+                    Text {
+                        text: root.current.width + " × " + root.current.height
+                            + (App.supports-gamma ? T.tr("gamma_por_software") : T.tr("sin_gamma_2"));
+                        font-size: 12px;
+                        color: Theme.s400;
+                    }
+                }
+                VerticalLayout {
+                    alignment: center;
+                    CareButton {
+                        text: T.tr("restablecer");
+                        icon: Icons.restart-alt;
+                        // En Pausa no hay valores que restablecer.
+                        enabled: App.mode != 7;
+                        clicked => { App.confirm-reset = true; }
+                    }
+                }
+            }
+            Rectangle { height: 14px; }
+            Rectangle {
+                height: 1px;
+                background: Theme.border-soft;
+            }
+            Rectangle { height: 14px; }
+            HorizontalLayout {
+                Text {
+                    horizontal-stretch: 1;
+                    text: T.tr("perfil_de_color");
+                    font-size: 11px;
+                    font-weight: 600;
+                    letter-spacing: 0.8px;
+                    color: Theme.s400;
+                }
+                Text {
+                    text: T.tr2("brillo_kelvin", Math.floor(App.brightness), App.kelvin);
+                    font-size: 11px;
+                    font-family: Theme.mono;
+                    color: Theme.s500;
+                }
+            }
+            Rectangle { height: 10px; }
+            VerticalLayout {
+                spacing: 10px;
+                HorizontalLayout {
+                    spacing: 10px;
+                    for m[i] in [0, 1, 2, 3]: ProfileButton {
+                        horizontal-stretch: 1;
+                        label: T.tr(root.modes[m].key);
+                        icon: root.modes[m].icon;
+                        selected: App.mode == m;
+                        clicked => { App.set-mode(m); }
+                    }
+                }
+                HorizontalLayout {
+                    spacing: 10px;
+                    for m[i] in [4, 5, 6, 7]: ProfileButton {
+                        horizontal-stretch: 1;
+                        label: T.tr(root.modes[m].key);
+                        icon: root.modes[m].icon;
+                        selected: App.mode == m;
+                        clicked => { App.set-mode(m); }
+                    }
+                }
+            }
+        }
+
+        // Tarjeta 2: brillo y temperatura (con borde de color durante la vista previa).
+        CareCard {
+            pad: 16px;
+            gap: 12px;
+            border-color: App.previewing ? (App.editing-night ? Theme.amber300 : Theme.e450).with-alpha(0.55) : Theme.border-soft;
+            SliderPanel {
+                icon: Icons.wb-sunny;
+                icon-tint: Theme.e450;
+                title: T.tr("brillo_por_software");
+                hint: root.night-side ? T.tr("valores_de_noche") : T.tr("multiplica_cada_pixel_baja_mas_alla_del_mini");
+                readout: Math.floor(App.brightness) + "%";
+                readout-color: Theme.e450;
+                readout-width: 54px;
+                minus => { App.step-brightness(-1); }
+                plus => { App.step-brightness(1); }
+                GradientSlider {
+                    minimum: 0;
+                    maximum: 100;
+                    value: App.brightness;
+                    gradient: @linear-gradient(90deg, Theme.b0[Theme.accent] 0%, Theme.b1[Theme.accent] 42%, Theme.b2[Theme.accent] 76%, Theme.b3[Theme.accent] 100%);
+                    changed(v) => { App.set-brightness(v); }
+                    released => { App.slider-released(); }
+                }
+            }
+            SliderPanel {
+                icon: Icons.thermostat;
+                icon-tint: Theme.amber300;
+                title: T.tr("temperatura_de_color");
+                hint: root.night-side ? T.tr("color_de_noche") : T.tr(root.kelvin-key(App.kelvin));
+                readout: App.kelvin + " K";
+                readout-color: Theme.amber200;
+                readout-width: 72px;
+                minus => { App.step-kelvin(-1); }
+                plus => { App.step-kelvin(1); }
+                GradientSlider {
+                    minimum: App.kelvin-min;
+                    maximum: App.kelvin-max;
+                    value: App.kelvin;
+                    // Degradado del rediseño HTML (los dos temas).
+                    gradient: @linear-gradient(90deg, #EA580C 0%, #F97316 24%, #FBBF24 48%, #FDE68A 68%, #FEF3C7 84%, #DBEAFE 100%);
+                    changed(v) => { App.set-kelvin(v); }
+                    released => { App.slider-released(); }
+                }
+            }
+        }
+
+        // Tarjeta 3: Auto Día/Noche.
+        AutoDayNight { }
+    }
+}

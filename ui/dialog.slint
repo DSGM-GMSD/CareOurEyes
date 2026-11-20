@@ -1,0 +1,337 @@
+// Diálogo «Auto Día/Noche»: hora según la ubicación u horas fijas, y transición.
+// Equivale a SunriseDialog de la versión Kotlin.
+
+import { Theme, T } from "theme.slint";
+import { App } from "state.slint";
+import { StepGlyph, ToggleRow, Stepper } from "widgets.slint";
+
+component Radio inherits HorizontalLayout {
+    in property <string> text;
+    in property <bool> selected;
+    callback clicked;
+    spacing: 8px;
+    Rectangle {
+        y: (parent.height - 18px) / 2;
+        width: 18px;
+        height: 18px;
+        border-radius: 9px;
+        border-width: 2px;
+        border-color: root.selected ? Theme.e450 : Theme.s400;
+        Rectangle {
+            width: 8px;
+            height: 8px;
+            border-radius: 4px;
+            background: root.selected ? Theme.e450 : transparent;
+        }
+        TouchArea {
+            mouse-cursor: pointer;
+            clicked => { root.clicked(); }
+        }
+    }
+    Text {
+        text: root.text;
+        font-size: 13px;
+        color: Theme.s200;
+        vertical-alignment: center;
+        TouchArea {
+            mouse-cursor: pointer;
+            clicked => { root.clicked(); }
+        }
+    }
+}
+
+component Field inherits VerticalLayout {
+    in property <string> label;
+    in-out property <string> text;
+    callback edited();
+    spacing: 4px;
+    Text {
+        text: root.label;
+        font-size: 11px;
+        color: Theme.s400;
+    }
+    Rectangle {
+        height: 36px;
+        border-radius: 10px;
+        background: Theme.o850;
+        border-width: 1px;
+        border-color: input.has-focus ? Theme.e450.with-alpha(0.6) : Theme.border-mid;
+        input := TextInput {
+            x: 10px;
+            width: parent.width - 20px;
+            text <=> root.text;
+            font-size: 13px;
+            font-family: Theme.mono;
+            color: Theme.s200;
+            vertical-alignment: center;
+            single-line: true;
+            selection-background-color: Theme.e450.with-alpha(0.35);
+            edited => { root.edited(); }
+        }
+    }
+}
+
+component ClockEdit inherits HorizontalLayout {
+    in property <string> label;
+    in-out property <int> hour;
+    in-out property <int> minute;
+    spacing: 4px;
+    Text {
+        width: 90px;
+        text: root.label;
+        font-size: 12px;
+        color: Theme.s200;
+        vertical-alignment: center;
+    }
+    StepGlyph {
+        text: "−";
+        clicked => { root.hour = Math.mod(root.hour + 23, 24); }
+    }
+    Text {
+        width: 26px;
+        text: (root.hour < 10 ? "0" : "") + root.hour;
+        font-size: 13px;
+        font-weight: 500;
+        font-family: Theme.mono;
+        color: Theme.s200;
+        horizontal-alignment: center;
+        vertical-alignment: center;
+    }
+    StepGlyph {
+        text: "+";
+        clicked => { root.hour = Math.mod(root.hour + 1, 24); }
+    }
+    Text {
+        text: ":";
+        font-size: 13px;
+        color: Theme.s200;
+        vertical-alignment: center;
+    }
+    StepGlyph {
+        text: "−";
+        clicked => { root.minute = Math.mod(root.minute + 59, 60); }
+    }
+    Text {
+        width: 26px;
+        text: (root.minute < 10 ? "0" : "") + root.minute;
+        font-size: 13px;
+        font-weight: 500;
+        font-family: Theme.mono;
+        color: Theme.s200;
+        horizontal-alignment: center;
+        vertical-alignment: center;
+    }
+    StepGlyph {
+        text: "+";
+        clicked => { root.minute = Math.mod(root.minute + 1, 60); }
+    }
+    Rectangle { horizontal-stretch: 1; }
+}
+
+component TextAction inherits Rectangle {
+    in property <string> text;
+    in property <bool> enabled: true;
+    callback clicked;
+    height: 36px;
+    border-radius: 18px;
+    background: ta.has-hover && root.enabled ? Theme.e450.with-alpha(0.10) : transparent;
+    HorizontalLayout {
+        padding-left: 12px;
+        padding-right: 12px;
+        Text {
+            text: root.text;
+            font-size: 13px;
+            font-weight: 600;
+            color: root.enabled ? Theme.e450 : Theme.s500;
+            vertical-alignment: center;
+        }
+    }
+    ta := TouchArea {
+        mouse-cursor: pointer;
+        enabled: root.enabled;
+        clicked => { root.clicked(); }
+    }
+}
+
+// Capa modal: fondo oscurecido y la tarjeta del diálogo en el centro.
+export component ScheduleDialog inherits Rectangle {
+    background: #00000099;
+    // El fondo se traga los clics; pulsar fuera cierra, como en Kotlin.
+    TouchArea {
+        clicked => { App.dialog-open = false; }
+    }
+    card := Rectangle {
+        width: 440px;
+        height: lay.preferred-height;
+        border-radius: 24px;
+        background: Theme.menu;
+        border-width: 1px;
+        border-color: Theme.border-soft;
+        drop-shadow-blur: 24px;
+        drop-shadow-color: #00000080;
+        TouchArea { }
+        lay := VerticalLayout {
+            padding: 24px;
+            spacing: 8px;
+            Text {
+                text: T.tr("auto_dia_noche");
+                font-size: 20px;
+                font-weight: 600;
+                color: Theme.s200;
+            }
+            Rectangle { height: 6px; }
+            HorizontalLayout {
+                spacing: 16px;
+                alignment: start;
+                Radio {
+                    text: T.tr("hora_segun_la_ubicacion");
+                    selected: App.d-use-location;
+                    clicked => { App.d-use-location = true; }
+                }
+                Radio {
+                    text: T.tr("hora_personalizada");
+                    selected: !App.d-use-location;
+                    clicked => { App.d-use-location = false; }
+                }
+            }
+            if App.d-use-location: VerticalLayout {
+                spacing: 8px;
+                Text {
+                    text: T.tr1("amanecer_x", App.d-sunrise);
+                    font-size: 13px;
+                    color: Theme.s200;
+                }
+                Text {
+                    text: T.tr1("atardecer_x", App.d-sunset);
+                    font-size: 13px;
+                    color: Theme.s200;
+                }
+                HorizontalLayout {
+                    spacing: 8px;
+                    Field {
+                        horizontal-stretch: 1;
+                        label: T.tr("latitud");
+                        text <=> App.d-lat;
+                        edited => { App.coords-edited(); }
+                    }
+                    Field {
+                        horizontal-stretch: 1;
+                        label: T.tr("longitud");
+                        text <=> App.d-lon;
+                        edited => { App.coords-edited(); }
+                    }
+                }
+                HorizontalLayout {
+                    alignment: start;
+                    TextAction {
+                        text: T.tr("detectar_mi_ubicacion");
+                        enabled: App.d-lookup != 1;
+                        clicked => { App.detect-location(); }
+                    }
+                }
+                Text {
+                    text: App.d-lookup == 1 ? T.tr("buscando_tu_ubicacion_aproximada")
+                        : App.d-lookup == 2 ? T.tr("no_se_pudo_detectar_escribe_la_latitud_y_la")
+                        : T.tr("detectar_consulta_ipwho_is_por_https_con_tu");
+                    font-size: 11px;
+                    color: Theme.s400;
+                    wrap: word-wrap;
+                }
+            }
+            if !App.d-use-location: VerticalLayout {
+                spacing: 8px;
+                ClockEdit {
+                    label: T.tr("amanecer");
+                    hour <=> App.d-day-h;
+                    minute <=> App.d-day-m;
+                }
+                ClockEdit {
+                    label: T.tr("atardecer");
+                    hour <=> App.d-night-h;
+                    minute <=> App.d-night-m;
+                }
+            }
+            ToggleRow {
+                title: T.tr("transicion_suave_entre_el_dia_y_la_noche");
+                subtitle: T.tr("el_cambio_de_color_no_es_de_golpe");
+                checked: App.d-smooth;
+                toggled(on) => { App.d-smooth = on; }
+            }
+            if App.d-smooth: Stepper {
+                label: T.tr("rs_duracion_transicion");
+                subtitle: T.tr("rs_duracion_transicion_texto");
+                value: App.d-minutes;
+                minimum: 15;
+                maximum: 300;
+                step: 15;
+                suffix: " min";
+                changed(v) => { App.d-minutes = v; }
+            }
+            Rectangle { height: 8px; }
+            HorizontalLayout {
+                alignment: end;
+                spacing: 8px;
+                TextAction {
+                    text: T.tr("cancelar");
+                    clicked => { App.dialog-open = false; }
+                }
+                TextAction {
+                    text: T.tr("guardar");
+                    clicked => { App.save-dialog(); }
+                }
+            }
+        }
+    }
+}
+
+// Confirmación antes de restablecer el perfil activo.
+export component ResetDialog inherits Rectangle {
+    background: #00000099;
+    TouchArea {
+        clicked => { App.confirm-reset = false; }
+    }
+    Rectangle {
+        width: 400px;
+        height: lay.preferred-height;
+        border-radius: 24px;
+        background: Theme.menu;
+        border-width: 1px;
+        border-color: Theme.border-soft;
+        drop-shadow-blur: 24px;
+        drop-shadow-color: #00000080;
+        TouchArea { }
+        lay := VerticalLayout {
+            padding: 24px;
+            spacing: 10px;
+            Text {
+                text: T.tr1("rs_restablecer_titulo", App.mode-name);
+                font-size: 18px;
+                font-weight: 600;
+                color: Theme.s200;
+                wrap: word-wrap;
+            }
+            Text {
+                text: T.tr("rs_restablecer_texto");
+                font-size: 13px;
+                color: Theme.s300;
+                wrap: word-wrap;
+            }
+            Rectangle { height: 6px; }
+            HorizontalLayout {
+                alignment: end;
+                spacing: 8px;
+                TextAction {
+                    text: T.tr("cancelar");
+                    clicked => { App.confirm-reset = false; }
+                }
+                TextAction {
+                    text: T.tr("restablecer");
+                    clicked => {
+                        App.confirm-reset = false;
+                        App.reset-monitor();
+                    }
+                }
+            }
+        }
+    }
+}

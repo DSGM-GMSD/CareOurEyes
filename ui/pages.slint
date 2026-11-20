@@ -1,0 +1,242 @@
+// Páginas Opciones y Acerca de, y el aviso de las secciones de fases futuras.
+
+import { Theme, T } from "theme.slint";
+import { Icons } from "icons.slint";
+import { App } from "state.slint";
+import { Icon, EyeMark, CareCard, CareButton, CareChip, Badge, ToggleRow, InfoCard, SectionCard, PageHeader, TextMenu } from "widgets.slint";
+
+// Para Pausa, Enfoque y Prisma mientras llegan a la versión Rust.
+export component PendingPage inherits VerticalLayout {
+    in property <string> icon;
+    in property <string> title;
+    in property <string> subtitle;
+    spacing: 8px;
+    alignment: start;
+    PageHeader {
+        icon: root.icon;
+        title: root.title;
+        subtitle: root.subtitle;
+    }
+    InfoCard {
+        title: T.tr("rs_proximamente");
+        body: T.tr("rs_proximamente_texto");
+    }
+}
+
+component GeneralOptions inherits VerticalLayout {
+    spacing: 8px;
+    SectionCard {
+        title: T.tr("apariencia");
+        subtitle: T.tr("tema_claro_oscuro_y_color_de_acento");
+        Text {
+            text: T.tr("tema");
+            font-size: 13px;
+            color: Theme.s200;
+        }
+        TextMenu {
+            options: [T.tr("modo_oscuro"), T.tr("modo_claro"), T.tr("automatico_segun_el_sistema")];
+            current: App.theme-mode;
+            picked(i) => { App.set-theme-mode(i); }
+        }
+        Text {
+            text: T.tr("color_de_acento");
+            font-size: 13px;
+            color: Theme.s200;
+        }
+        TextMenu {
+            options: [T.tr("esmeralda"), T.tr("cian"), T.tr("azul"), T.tr("indigo"), T.tr("violeta"), T.tr("ambar"), T.tr("rosa")];
+            current: Theme.accent;
+            picked(i) => { App.set-accent(i); }
+        }
+    }
+    SectionCard {
+        title: T.tr("general");
+        subtitle: T.tr("idioma_arranque_y_avisos");
+        Text {
+            text: T.tr("idioma");
+            font-size: 13px;
+            color: Theme.s200;
+        }
+        TextMenu {
+            options: App.language-names;
+            current: App.language;
+            picked(i) => { App.set-language(i); }
+        }
+        if App.language-restart: Text {
+            text: T.tr("idioma_reiniciar");
+            font-size: 11px;
+            color: Theme.s400;
+        }
+        ToggleRow {
+            title: T.tr("buscar_actualizaciones_al_abrir");
+            subtitle: T.tr("consulta_github_al_abrir_y_avisa_si_hay_una");
+            checked: App.check-updates;
+            toggled(on) => { App.set-option("checkUpdates", on); }
+        }
+        HorizontalLayout {
+            spacing: 8px;
+            Text {
+                horizontal-stretch: 1;
+                text: App.checking ? T.tr("comprobando") : App.update-text;
+                font-size: 12px;
+                color: Theme.s300;
+                vertical-alignment: center;
+                wrap: word-wrap;
+            }
+            if App.update-available: CareButton {
+                text: T.tr("descargar");
+                clicked => { App.download-update(); }
+            }
+            if !App.update-available: CareButton {
+                text: T.tr("buscar_ahora");
+                enabled: !App.checking;
+                clicked => { App.check-now(); }
+            }
+        }
+        ToggleRow {
+            title: T.tr("arrancar_con_windows");
+            subtitle: T.tr("abre_careoureyes_en_la_bandeja_al_iniciar_se");
+            checked: App.autostart;
+            toggled(on) => { App.set-option("startWithWindows", on); }
+        }
+    }
+    SectionCard {
+        title: T.tr("ayuda");
+        subtitle: T.tr("problemas_y_registro_de_errores");
+        HorizontalLayout {
+            spacing: 8px;
+            alignment: start;
+            CareButton {
+                text: T.tr("reportar_un_problema");
+                clicked => { App.open-issues(); }
+            }
+            CareButton {
+                text: T.tr("abrir_carpeta_de_registros");
+                clicked => { App.open-config-folder(); }
+            }
+        }
+        Text {
+            text: T.tr("los_errores_se_guardan_solo_en_este_equipo_e");
+            font-size: 11px;
+            color: Theme.s400;
+            wrap: word-wrap;
+        }
+    }
+}
+
+component DisplayOptions inherits VerticalLayout {
+    spacing: 8px;
+    SectionCard {
+        title: T.tr("pantalla");
+        subtitle: T.tr("si_el_color_o_el_brillo_no_responden_prueba");
+        ToggleRow {
+            title: T.tr("transicion_suave");
+            subtitle: T.tr("el_brillo_y_el_color_se_deslizan_no_saltan");
+            checked: App.smooth;
+            toggled(on) => { App.set-option("smoothChanges", on); }
+        }
+        ToggleRow {
+            title: T.tr("ajuste_estandar");
+            subtitle: T.tr("usa_el_ajuste_estandar_de_temperatura_y_bril");
+            checked: App.standard-gamma;
+            toggled(on) => { App.set-option("standardGamma", on); }
+        }
+        ToggleRow {
+            title: T.tr("rango_de_color_mas_amplio");
+            subtitle: T.tr2("rs_rango_kelvin", "1000", "10000");
+            checked: App.wider-kelvin;
+            toggled(on) => { App.set-option("widerKelvin", on); }
+        }
+        ToggleRow {
+            title: T.tr("rango_de_brillo_mas_amplio");
+            subtitle: T.tr1("rs_rango_brillo", "5");
+            checked: App.wider-brightness;
+            toggled(on) => { App.set-option("widerBrightness", on); }
+        }
+    }
+}
+
+export component OptionsPage inherits VerticalLayout {
+    property <[string]> tabs: [T.tr("general"), T.tr("temporizador"), T.tr("pantalla"), T.tr("atajos"), T.tr("reglas")];
+    spacing: 8px;
+    alignment: start;
+    PageHeader {
+        icon: Icons.settings;
+        title: T.tr("opciones");
+        subtitle: T.tr("opciones_resumen");
+    }
+    HorizontalLayout {
+        spacing: 6px;
+        alignment: start;
+        for tab[i] in root.tabs: CareChip {
+            text: tab;
+            selected: App.option-tab == i;
+            clicked => { App.option-tab = i; }
+        }
+    }
+    if App.option-tab == 0: GeneralOptions { }
+    if App.option-tab == 2: DisplayOptions { }
+    if App.option-tab == 1 || App.option-tab == 3 || App.option-tab == 4: InfoCard {
+        title: T.tr("rs_proximamente");
+        body: T.tr("rs_proximamente_texto");
+    }
+}
+
+export component AboutPage inherits VerticalLayout {
+    alignment: start;
+    CareCard {
+        pad: 28px;
+        gap: 8px;
+        HorizontalLayout {
+            alignment: center;
+            EyeMark { size: 56px; }
+        }
+        Text {
+            text: "CareOurEyes";
+            font-size: 18px;
+            font-weight: 700;
+            color: Theme.s200;
+            horizontal-alignment: center;
+        }
+        HorizontalLayout {
+            alignment: center;
+            Badge {
+                text: "v" + App.version;
+                mono: true;
+                ink: Theme.e450;
+            }
+        }
+        HorizontalLayout {
+            alignment: center;
+            Text {
+                width: 420px;
+                text: T.tr("utilidad_ligera_de_ergonomia_visual_y_calibr");
+                font-size: 12px;
+                color: Theme.s400;
+                horizontal-alignment: center;
+                wrap: word-wrap;
+            }
+        }
+        HorizontalLayout {
+            alignment: center;
+            Badge {
+                text: T.tr1("motor_x", App.engine);
+                mono: true;
+                ink: Theme.s300;
+            }
+        }
+        Text {
+            text: T.tr("licencia_gnu_gpl_v3_ver_el_archivo_license");
+            font-size: 11px;
+            color: Theme.s500;
+            horizontal-alignment: center;
+        }
+        HorizontalLayout {
+            alignment: center;
+            CareButton {
+                text: T.tr("codigo_fuente_en_github");
+                clicked => { App.open-repo(); }
+            }
+        }
+    }
+}

@@ -1,0 +1,58 @@
+[package]
+name = "careoureyes"
+version = "2.0.0-alpha.1"
+edition = "2021"
+description = "CareOurEyes: software brightness, color temperature and eye-care profiles"
+license = "GPL-3.0-only"
+repository = "https://github.com/DSGM-GMSD/CareOurEyes"
+rust-version = "1.82"
+
+[[bin]]
+name = "CareOurEyes"
+path = "src/main.rs"
+
+[dependencies]
+# Slint bajo su licencia GPLv3 (compatible con la GPL-3.0 de este proyecto).
+# Solo el renderizador por software: sin OpenGL/Skia => menos RAM.
+slint = { version = "1.18", default-features = false, features = [
+    "std",
+    "backend-winit",
+    "renderer-software",
+    "compat-1-2",
+    "raw-window-handle-06",
+] }
+raw-window-handle = "0.6"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+chrono = { version = "0.4", default-features = false, features = ["clock", "std"] }
+sys-locale = "0.3"
+ureq = { version = "2", default-features = false, features = ["tls"] }
+
+[target.'cfg(windows)'.dependencies]
+windows = { version = "0.58", features = [
+    "Win32_Foundation",
+    "Win32_Devices_Display",
+    "Win32_Graphics_Gdi",
+    "Win32_Graphics_Dwm",
+    "Win32_UI_ColorSystem",
+    "Win32_UI_WindowsAndMessaging",
+    "Win32_UI_Shell",
+    "Win32_UI_Input_KeyboardAndMouse",
+    "Win32_System_Registry",
+    "Win32_System_LibraryLoader",
+    "Win32_System_Power",
+    "Win32_System_Threading",
+    "Win32_Security",
+    "Win32_UI_HiDpi",
+] }
+
+[build-dependencies]
+slint-build = "1.18"
+# Icono y datos de versión del .exe (solo al compilar para Windows).
+embed-resource = "3"
+
+[profile.release]
+opt-level = "s"
+lto = true
+codegen-units = 1
+strip = true
