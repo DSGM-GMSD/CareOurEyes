@@ -5,7 +5,7 @@ edition = "2021"
 description = "CareOurEyes: software brightness, color temperature and eye-care profiles"
 license = "GPL-3.0-only"
 repository = "https://github.com/DSGM-GMSD/CareOurEyes"
-rust-version = "1.82"
+rust-version = "1.95"
 
 [[bin]]
 name = "CareOurEyes"

@@ -1,0 +1,163 @@
+# Compila, atesta y publica el instalador cuando se sube una etiqueta de versión.
+# Copiar a .github/workflows/release.yml.
+#
+# La etiqueta es el acto de publicar, a propósito. Así el archivo publicado y el
+# código del que salió son el mismo commit, que es toda la afirmación que hace la
+# atestación. No se crea el release a mano y no queda en borrador.
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write # crear el release
+  id-token: write # token OIDC con el que se firma la atestación
+  attestations: write
+
+concurrency:
+  group: release-${{ github.ref_name }}
+  cancel-in-progress: false
+
+jobs:
+  version:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      numeric: ${{ steps.version.outputs.numeric }}
+      prerelease: ${{ steps.version.outputs.prerelease }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      # La etiqueta debe ser exactamente «v» + la versión de Cargo.toml
+      # (p. ej. v2.0.0-alpha.2). Una versión con guion (-alpha, -beta, -rc)
+      # se publica como pre-release.
+      - name: Comprobar que la etiqueta coincide con Cargo.toml
+        id: version
+        run: |
+          set -euo pipefail
+          version=$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -1)
+          tag="${GITHUB_REF_NAME#v}"
+          if [ -z "$version" ]; then
+            echo "::error::No se pudo leer la versión de Cargo.toml."
+            exit 1
+          fi
+          if [ "$tag" != "$version" ]; then
+            echo "::error::La etiqueta ${GITHUB_REF_NAME} no coincide con la versión ${version} de Cargo.toml."
+            exit 1
+          fi
+          echo "version=${version}" >> "$GITHUB_OUTPUT"
+          echo "numeric=${version%%-*}" >> "$GITHUB_OUTPUT"
+          if [ "$version" != "${version%%-*}" ]; then
+            echo "prerelease=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "prerelease=false" >> "$GITHUB_OUTPUT"
+          fi
+          echo "OK: ${GITHUB_REF_NAME} = Cargo.toml ${version}."
+
+  windows:
+    needs: version
+    runs-on: windows-latest
+    env:
+      VERSION: ${{ needs.version.outputs.version }}
+      NUMERIC: ${{ needs.version.outputs.numeric }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Rust estable
+        run: rustup update stable --no-self-update && rustup default stable
+
+      - name: Compilar
+        run: cargo build --release --locked
+
+      - name: Pruebas
+        run: cargo test --release --locked
+
+      - name: Inno Setup
+        shell: pwsh
+        run: |
+          $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
+          if (-not (Test-Path $iscc)) { choco install innosetup --no-progress -y }
+          if (-not (Test-Path $iscc)) { throw "No se encontró ISCC.exe" }
+          "ISCC=$iscc" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+
+      - name: Instalador y ejecutable portable
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force dist | Out-Null
+          & $env:ISCC packaging\careoureyes.iss "/DAppVersion=$env:VERSION" "/DNumericVersion=$env:NUMERIC"
+          if ($LASTEXITCODE -ne 0) { throw "ISCC falló" }
+          Copy-Item target\release\CareOurEyes.exe "dist\CareOurEyes-$env:VERSION-portable.exe"
+          Get-ChildItem dist
+
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: CareOurEyes-Windows
+          if-no-files-found: error
+          path: dist/*.exe
+
+  release:
+    needs: [version, windows]
+    runs-on: ubuntu-latest
+    steps:
+      # gh release create busca el remoto en el checkout.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: Suma de verificación
+        run: |
+          set -euo pipefail
+          cd dist
+          find . -mindepth 2 -type f -name '*.exe' -exec mv -t . {} +
+          sha256sum *.exe > SHA256SUMS
+          cat SHA256SUMS
+
+      # Prueba que cada archivo salió de esta etiqueta y de este workflow.
+      # Se verifica con: gh attestation verify <archivo> -R DSGM-GMSD/CareOurEyes
+      - name: Atestación de procedencia
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        with:
+          subject-path: dist/*.exe
+
+      - name: Publicar
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          PRERELEASE: ${{ needs.version.outputs.prerelease }}
+        run: |
+          set -euo pipefail
+          cd dist
+          {
+            echo "Compilado desde la etiqueta \`${GITHUB_REF_NAME}\` por \`release.yml\` de este"
+            echo "repositorio, y publicado con una atestación de procedencia."
+            echo
+            echo "- \`*-setup.exe\`: instalador para tu usuario (no pide permisos de administrador)."
+            echo "- \`*-portable.exe\`: el programa solo, sin instalar."
+            echo
+            echo "### Verificar la descarga"
+            echo
+            echo '```sh'
+            for f in *.exe; do
+              echo "gh attestation verify ${f} -R ${GITHUB_REPOSITORY}"
+            done
+            echo '```'
+            echo
+            echo "### SHA-256"
+            echo
+            echo '```'
+            cat SHA256SUMS
+            echo '```'
+          } > "$RUNNER_TEMP/notes.md"
+          flags=()
+          if [ "$PRERELEASE" = "true" ]; then
+            flags+=(--prerelease)
+          fi
+          gh release create "$GITHUB_REF_NAME" \
+            *.exe SHA256SUMS \
+            --title "CareOurEyes ${GITHUB_REF_NAME}" \
+            --notes-file "$RUNNER_TEMP/notes.md" \
+            "${flags[@]}"

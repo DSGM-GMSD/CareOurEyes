@@ -1,0 +1,39 @@
+# Revisión automática de pull requests con CodeRabbit (gratis en repos públicos).
+# Comenta, no bloquea el merge.
+# yaml-language-server: $schema=https://coderabbit.ai/integrations/schema.v2.json
+language: es-ES
+reviews:
+  profile: chill
+  request_changes_workflow: false
+  high_level_summary: true
+  poem: false
+  review_status: true
+  collapse_walkthrough: true
+  auto_review:
+    enabled: true
+    drafts: false
+  path_filters:
+    - "!Cargo.lock"
+    - "!assets/**"
+    - "!ui/fonts/**"
+    - "!docs/**"
+  path_instructions:
+    - path: "src/platform/windows/**"
+      instructions: >-
+        Código Win32 con `unsafe`. Revisa que cada handle (HDC, HICON, HKEY, ventanas)
+        se libere, que los tamaños de las estructuras (`cbSize`, `cb`) se inicialicen y que
+        un fallo de la API no deje la pantalla con un filtro sin poder restaurarla.
+    - path: "src/**"
+      instructions: >-
+        La app corre en el hilo de Slint; el estado vive en un `thread_local`. Señala
+        préstamos `RefCell` que puedan solaparse (llamar a `with()` dentro de otro `with()`)
+        y cualquier objeto de Slint que pueda sobrevivir al bucle de eventos.
+    - path: "ui/**"
+      instructions: >-
+        Interfaz Slint. Todo texto visible debe salir de `T.tr(...)`; los colores, de `Theme`.
+    - path: "i18n/**"
+      instructions: >-
+        Traducciones `clave = valor`. Cada archivo debe tener las mismas claves que
+        `messages.properties` y conservar `{0}`, `{1}`… Revisa que el sentido coincida con el español.
+chat:
+  auto_reply: true

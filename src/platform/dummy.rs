@@ -8,7 +8,8 @@ pub struct Simulated;
 
 impl Backend for Simulated {
     fn name(&self) -> String {
-        "Simulador".into()
+        // COE_SIM_ENGINE permite poner otro nombre en las capturas del README.
+        std::env::var("COE_SIM_ENGINE").unwrap_or_else(|_| "Simulador".into())
     }
 
     fn displays(&mut self) -> Vec<DisplayInfo> {
