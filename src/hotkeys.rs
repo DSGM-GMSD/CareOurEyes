@@ -192,9 +192,11 @@ mod tests {
         // Ctrl o Alt solos (Slint los manda como 0x11 y 0x12): sigue esperando.
         assert_eq!(from_press("\u{11}", true, false, false, false), None);
         assert_eq!(from_press("\u{12}", false, true, false, false), None);
-        assert_eq!(from_vk(CTRL | ALT | SHIFT, 'U' as u32).map(label), Some("Ctrl+Alt+Shift+U".into()));
+        // En macOS, Alt se llama Option.
+        let alt = if cfg!(target_os = "macos") { "Option" } else { "Alt" };
+        assert_eq!(from_vk(CTRL | ALT | SHIFT, 'U' as u32).map(label), Some(format!("Ctrl+{alt}+Shift+U")));
         assert_eq!(from_vk(0, 'K' as u32), None);
-        assert_eq!(preview(CTRL | ALT, None), "Ctrl+Alt+…");
+        assert_eq!(preview(CTRL | ALT, None), format!("Ctrl+{alt}+…"));
         assert_eq!(preview(0, None), "");
     }
 }
