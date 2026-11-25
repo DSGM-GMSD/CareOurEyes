@@ -10,6 +10,8 @@ color temperature, per-monitor day/night profiles. GPL-3.0.*
 
 ![Interfaz de CareOurEyes](docs/captura-ui.png)
 
+**Sitio web:** <https://dsgm-gmsd.github.io/CareOurEyes/>
+
 > **Versión 2 en beta.** CareOurEyes se reescribió en **Rust + [Slint](https://slint.dev)**.
 > Funciona en **Windows** y en **Linux con X11** (p. ej. Linux Mint Cinnamon). La versión
 > para **macOS** es experimental: compila, pero todavía nadie la ha probado en un Mac
@@ -187,6 +189,7 @@ Linux y macOS (útil para trabajar en la interfaz). Para el paquete `.deb`:
 | `src/platform/macos/` | Gamma CoreGraphics, barra de menús, atajos (Carbon), Enfoque |
 | `ui/` | Interfaz Slint |
 | `packaging/` | Instalador (Inno Setup), `.desktop` de Linux, app de macOS y workflows |
+| `docs/` | Sitio web (GitHub Pages); se genera con `python3 packaging/site/build.py` |
 
 ### Publicar una versión
 
