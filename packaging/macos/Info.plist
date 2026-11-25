@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>CFBundleName</key><string>CareOurEyes</string>
+  <key>CFBundleDisplayName</key><string>CareOurEyes</string>
+  <key>CFBundleIdentifier</key><string>io.github.dsgm-gmsd.careoureyes</string>
+  <key>CFBundleExecutable</key><string>CareOurEyes</string>
+  <key>CFBundleIconFile</key><string>careoureyes</string>
+  <key>CFBundlePackageType</key><string>APPL</string>
+  <key>CFBundleShortVersionString</key><string>@NUMERIC@</string>
+  <key>CFBundleVersion</key><string>@VERSION@</string>
+  <key>LSMinimumSystemVersion</key><string>11.0</string>
+  <key>LSApplicationCategoryType</key><string>public.app-category.utilities</string>
+  <key>NSHighResolutionCapable</key><true/>
+  <!-- App de la barra de menús: sin icono en el Dock (se abre desde el icono de arriba). -->
+  <key>LSUIElement</key><true/>
+  <key>NSHumanReadableCopyright</key><string>GPL-3.0 · DSGM-GMSD</string>
+</dict>
+</plist>

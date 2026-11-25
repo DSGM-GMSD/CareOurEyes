@@ -1,6 +1,6 @@
 [package]
 name = "careoureyes"
-version = "2.0.0-alpha.1"
+version = "2.0.0-alpha.2"
 edition = "2021"
 description = "CareOurEyes: software brightness, color temperature and eye-care profiles"
 license = "GPL-3.0-only"
@@ -20,6 +20,8 @@ slint = { version = "1.18", default-features = false, features = [
     "renderer-software",
     "compat-1-2",
     "raw-window-handle-06",
+    # Para arrastrar la ventana sin marco en Linux y macOS.
+    "unstable-winit-030",
 ] }
 raw-window-handle = "0.6"
 serde = { version = "1", features = ["derive"] }
@@ -27,6 +29,26 @@ serde_json = "1"
 chrono = { version = "0.4", default-features = false, features = ["clock", "std"] }
 sys-locale = "0.3"
 ureq = { version = "2", default-features = false, features = ["tls"] }
+
+# Paquete .deb (cargo deb). Las dependencias del sistema se calculan solas.
+[package.metadata.deb]
+name = "careoureyes"
+maintainer = "DSGM-GMSD <166088953+DSGM-GMSD@users.noreply.github.com>"
+copyright = "DSGM-GMSD"
+license-file = ["LICENSE", "0"]
+section = "utils"
+priority = "optional"
+# winit carga las bibliotecas de X11 en tiempo de ejecución: no salen en «$auto».
+depends = "$auto, libx11-6, libx11-xcb1, libxcursor1, libxi6, libxrandr2, libxkbcommon0, libxkbcommon-x11-0"
+extended-description = """\
+Software brightness and color temperature for each display (X11), day/night \
+schedule, eye-care profiles, break reminders and global shortcuts."""
+assets = [
+    ["target/release/CareOurEyes", "usr/bin/", "755"],
+    ["packaging/linux/careoureyes.desktop", "usr/share/applications/", "644"],
+    ["assets/icon.png", "usr/share/icons/hicolor/512x512/apps/careoureyes.png", "644"],
+    ["README.md", "usr/share/doc/careoureyes/README.md", "644"],
+]
 
 [target.'cfg(windows)'.dependencies]
 windows = { version = "0.58", features = [
@@ -44,7 +66,26 @@ windows = { version = "0.58", features = [
     "Win32_System_Threading",
     "Win32_Security",
     "Win32_UI_HiDpi",
+    "Win32_UI_Magnification",
+    "Win32_System_SystemInformation",
+    "Win32_System_Diagnostics_Debug",
 ] }
+
+[target.'cfg(target_os = "linux")'.dependencies]
+# X11: gamma por RandR, atajos globales, inactividad y ventana activa.
+x11rb = { version = "0.13", features = ["randr", "screensaver"] }
+# Icono de bandeja (StatusNotifierItem), sin tokio.
+ksni = { version = "0.3", default-features = false, features = ["async-io", "blocking"] }
+png = "0.18"
+
+[target.'cfg(target_os = "macos")'.dependencies]
+# Icono en la barra de menús y atajos globales (los de Tauri, mantenidos).
+tray-icon = { version = "0.27", default-features = false }
+global-hotkey = "0.10"
+objc2 = "0.6"
+objc2-foundation = "0.3"
+objc2-app-kit = "0.3"
+png = "0.18"
 
 [build-dependencies]
 slint-build = "1.18"

@@ -41,11 +41,15 @@ export global App {
     callback end-preview();
     in property <bool> schedule-on: true;
     in property <string> schedule-range: "";
+    // «Una regla está aplicando …» (vacío si no hay regla activa).
+    in property <string> rule-notice: "";
 
     // Pide a Rust que vuelva a rellenar los valores (p. ej. al cambiar Día/Noche).
     callback refresh();
     callback select-monitor(int);
     callback refresh-monitors();
+    // Empezar a arrastrar la ventana (fuera de Windows).
+    callback start-drag();
     callback set-mode(int);
     callback set-brightness(float);
     callback set-kelvin(float);

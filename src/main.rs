@@ -8,8 +8,10 @@
 #![cfg_attr(not(windows), allow(dead_code))]
 
 mod app;
+mod breaks;
 mod color;
 mod config;
+mod hotkeys;
 mod i18n;
 mod net;
 mod platform;
@@ -42,8 +44,7 @@ fn install_panic_log() {
 fn main() {
     install_panic_log();
 
-    #[cfg(windows)]
-    if !platform::windows::shell::single_instance() {
+    if !platform::single_instance() {
         return; // La copia que ya corre se mostrará sola.
     }
 

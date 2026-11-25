@@ -121,7 +121,22 @@ pub fn current() -> &'static str {
 }
 
 /// Texto de `key`; `{0}`, `{1}`… se reemplazan por `args`.
+/// Fuera de Windows, algunos textos tienen otra versión (sin «Windows», sin «.exe»…).
+fn platform_key(key: &str) -> &str {
+    if cfg!(windows) {
+        return key;
+    }
+    match key {
+        "arrancar_con_windows" => "rs_arrancar_con_sistema",
+        "rs_atajos_texto" if cfg!(target_os = "macos") => "rs_atajos_texto_mac",
+        "rs_atajos_texto" => "rs_atajos_texto_x11",
+        "rs_regla_nueva_texto" => "rs_regla_nueva_texto_linux",
+        other => other,
+    }
+}
+
 pub fn tr_args(key: &str, args: &[&str]) -> String {
+    let key = platform_key(key);
     let mut text = STRINGS
         .get()
         .and_then(|s| s.lang.get(key).or_else(|| s.base.get(key)))

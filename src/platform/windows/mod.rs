@@ -1,5 +1,7 @@
 //! Windows: rampa gamma de GDI, bandeja, autoarranque y detalles de la ventana.
 
+pub mod desk;
+pub mod fx;
 pub mod gamma;
 pub mod shell;
 pub mod tray;

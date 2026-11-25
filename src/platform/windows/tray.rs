@@ -18,7 +18,7 @@ use windows::Win32::UI::Shell::{
 };
 use windows::Win32::UI::WindowsAndMessaging::{
     CreateWindowExW, DefWindowProcW, GetSystemMetrics, RegisterClassW, RegisterWindowMessageW, HMENU,
-    REGISTER_NOTIFICATION_FLAGS, SM_CXSMICON, WINDOW_EX_STYLE, WM_APP, WM_DISPLAYCHANGE, WM_LBUTTONUP,
+    REGISTER_NOTIFICATION_FLAGS, SM_CXSMICON, WINDOW_EX_STYLE, WM_APP, WM_DISPLAYCHANGE, WM_HOTKEY, WM_LBUTTONUP,
     WM_POWERBROADCAST, WM_RBUTTONUP, WM_SETTINGCHANGE, WNDCLASSW, WS_OVERLAPPED,
 };
 
@@ -28,21 +28,7 @@ const PBT_APMRESUMEAUTOMATIC: usize = 0x12;
 const PBT_POWERSETTINGCHANGE: usize = 0x8013;
 const GUID_CONSOLE_DISPLAY_STATE: GUID = GUID::from_u128(0x6fe69556_704a_47a0_8f24_c28d936fda47);
 
-#[derive(Clone, Copy, Debug)]
-pub enum TrayEvent {
-    /// Clic izquierdo en el icono.
-    Open,
-    /// Clic derecho, con la posición del cursor en píxeles de pantalla.
-    Menu(i32, i32),
-    /// El equipo volvió de suspensión o se encendió la pantalla.
-    Resumed,
-    /// Se conectó, quitó o cambió de resolución una pantalla.
-    DisplaysChanged,
-    /// Otra copia de la app pidió mostrar la ventana.
-    ShowRequested,
-    /// Cambió el tema claro/oscuro de Windows.
-    ThemeChanged,
-}
+pub use crate::platform::TrayEvent;
 
 struct TrayState {
     hwnd: HWND,
@@ -92,6 +78,7 @@ unsafe extern "system" fn wndproc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: 
             return LRESULT(1);
         }
         WM_DISPLAYCHANGE => emit(TrayEvent::DisplaysChanged),
+        WM_HOTKEY => emit(TrayEvent::Hotkey(wparam.0 as i32)),
         WM_SETTINGCHANGE => {
             if lparam.0 != 0 {
                 let text = windows::core::PCWSTR(lparam.0 as *const u16).to_string().unwrap_or_default();
@@ -170,6 +157,27 @@ pub fn create(icon_png: &[u8], tooltip: &str, handler: impl Fn(TrayEvent) + 'sta
         });
         added
     }
+}
+
+/// Registra los atajos globales en la ventana oculta (los anteriores se quitan).
+/// Devuelve los números que no se pudieron registrar (otra app ya los usa).
+pub fn register_hotkeys(list: &[(i32, u32, u32)]) -> Vec<i32> {
+    use windows::Win32::UI::Input::KeyboardAndMouse::{RegisterHotKey, UnregisterHotKey, HOT_KEY_MODIFIERS, MOD_NOREPEAT};
+    let Some(hwnd) = TRAY.with(|t| t.borrow().as_ref().map(|s| s.hwnd)) else {
+        return list.iter().map(|x| x.0).collect();
+    };
+    let mut failed = Vec::new();
+    unsafe {
+        for id in 1..=64 {
+            let _ = UnregisterHotKey(hwnd, id);
+        }
+        for &(id, mods, vk) in list {
+            if RegisterHotKey(hwnd, id, HOT_KEY_MODIFIERS(mods) | MOD_NOREPEAT, vk).is_err() {
+                failed.push(id);
+            }
+        }
+    }
+    failed
 }
 
 pub fn remove() {

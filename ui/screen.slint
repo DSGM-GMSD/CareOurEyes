@@ -33,7 +33,7 @@ component MonitorSelector inherits Rectangle {
             background: Theme.e450;
         }
         Text {
-            text: root.current.name;
+            text: App.sync-monitors ? T.tr("rs_todas_pantallas") : root.current.name;
             font-size: 13px;
             font-weight: 600;
             color: Theme.s200;
@@ -42,7 +42,7 @@ component MonitorSelector inherits Rectangle {
         VerticalLayout {
             alignment: center;
             Badge {
-                text: root.current.width + "×" + root.current.height;
+                text: App.sync-monitors ? T.tr1("rs_n_pantallas", "" + App.monitors.length) : root.current.width + "×" + root.current.height;
                 mono: true;
             }
         }
@@ -76,11 +76,58 @@ component MonitorSelector inherits Rectangle {
             drop-shadow-color: Theme.popup-shadow;
             VerticalLayout {
                 padding: 6px;
-                for m[i] in App.monitors: Rectangle {
+                // Todas a la vez: los mismos ajustes en cada pantalla.
+                if App.monitors.length > 1: Rectangle {
+                    property <bool> on: App.sync-monitors;
                     border-radius: 8px;
-                    background: i == App.selected && !Theme.dark ? Theme.tint : ita.has-hover ? Theme.menu-hover : transparent;
+                    background: self.on && !Theme.dark ? Theme.tint : ata.has-hover ? Theme.menu-hover : transparent;
                     border-width: 1px;
-                    border-color: i == App.selected && !Theme.dark ? Theme.tint-border : transparent;
+                    border-color: self.on && !Theme.dark ? Theme.tint-border : transparent;
+                    HorizontalLayout {
+                        padding: 10px;
+                        spacing: 8px;
+                        VerticalLayout {
+                            horizontal-stretch: 1;
+                            Text {
+                                text: T.tr("rs_todas_pantallas");
+                                font-size: 12px;
+                                font-weight: 600;
+                                color: App.sync-monitors ? Theme.s200 : Theme.s300;
+                            }
+                            Text {
+                                text: T.tr("rs_todas_detalle");
+                                font-size: 11px;
+                                color: Theme.s400;
+                            }
+                        }
+                        if App.sync-monitors: Icon {
+                            y: (parent.height - self.height) / 2;
+                            commands: Icons.check;
+                            size: 16px;
+                            tint: Theme.e450;
+                        }
+                    }
+                    ata := TouchArea {
+                        mouse-cursor: pointer;
+                        clicked => {
+                            App.set-option("syncMonitors", true);
+                            menu.close();
+                        }
+                    }
+                }
+                if App.monitors.length > 1: Rectangle {
+                    height: 9px;
+                    Rectangle {
+                        height: 1px;
+                        background: Theme.border-soft;
+                    }
+                }
+                for m[i] in App.monitors: Rectangle {
+                    property <bool> on: i == App.selected && !App.sync-monitors;
+                    border-radius: 8px;
+                    background: self.on && !Theme.dark ? Theme.tint : ita.has-hover ? Theme.menu-hover : transparent;
+                    border-width: 1px;
+                    border-color: self.on && !Theme.dark ? Theme.tint-border : transparent;
                     HorizontalLayout {
                         padding: 10px;
                         spacing: 8px;
@@ -90,7 +137,7 @@ component MonitorSelector inherits Rectangle {
                                 text: m.name;
                                 font-size: 12px;
                                 font-weight: 600;
-                                color: i == App.selected ? Theme.s200 : Theme.s300;
+                                color: i == App.selected && !App.sync-monitors ? Theme.s200 : Theme.s300;
                             }
                             Text {
                                 text: m.width + " × " + m.height + (m.primary ? T.tr("sufijo_principal") : "");
@@ -98,7 +145,7 @@ component MonitorSelector inherits Rectangle {
                                 color: Theme.s400;
                             }
                         }
-                        if i == App.selected: Icon {
+                        if i == App.selected && !App.sync-monitors: Icon {
                             y: (parent.height - self.height) / 2;
                             commands: Icons.check;
                             size: 16px;
@@ -108,6 +155,9 @@ component MonitorSelector inherits Rectangle {
                     ita := TouchArea {
                         mouse-cursor: pointer;
                         clicked => {
+                            if App.sync-monitors {
+                                App.set-option("syncMonitors", false);
+                            }
                             App.select-monitor(i);
                             menu.close();
                         }
@@ -444,6 +494,31 @@ export component ScreenPage inherits VerticalLayout {
     if App.monitors.length > 0: VerticalLayout {
         spacing: 12px;
 
+        if App.rule-notice != "": Rectangle {
+            border-radius: 12px;
+            background: Theme.tint;
+            border-width: 1px;
+            border-color: Theme.tint-border;
+            HorizontalLayout {
+                padding: 10px;
+                spacing: 8px;
+                Icon {
+                    y: (parent.height - self.height) / 2;
+                    commands: Icons.tune;
+                    size: 16px;
+                    tint: Theme.e450;
+                }
+                Text {
+                    horizontal-stretch: 1;
+                    text: App.rule-notice;
+                    font-size: 12px;
+                    color: Theme.e450;
+                    vertical-alignment: center;
+                    wrap: word-wrap;
+                }
+            }
+        }
+
         // Selector de monitor y estado del motor.
         HorizontalLayout {
             MonitorSelector { }
@@ -472,7 +547,7 @@ export component ScreenPage inherits VerticalLayout {
                         spacing: 8px;
                         alignment: start;
                         Text {
-                            text: root.current.name;
+                            text: App.sync-monitors ? T.tr("rs_todas_pantallas") : root.current.name;
                             font-size: 16px;
                             font-weight: 700;
                             color: Theme.s200;
@@ -490,7 +565,7 @@ export component ScreenPage inherits VerticalLayout {
                         }
                     }
                     Text {
-                        text: root.current.width + " × " + root.current.height
+                        text: (App.sync-monitors ? T.tr1("rs_n_pantallas", "" + App.monitors.length) : root.current.width + " × " + root.current.height)
                             + (App.supports-gamma ? T.tr("gamma_por_software") : T.tr("sin_gamma_2"));
                         font-size: 12px;
                         color: Theme.s400;

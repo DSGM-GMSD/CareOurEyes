@@ -3,6 +3,8 @@
 import { Theme, T } from "theme.slint";
 import { Icons } from "icons.slint";
 import { App } from "state.slint";
+import { TimerOptions } from "rest.slint";
+import { KeysOptions, RulesOptions } from "keys.slint";
 import { Icon, EyeMark, CareCard, CareButton, CareChip, Badge, ToggleRow, InfoCard, SectionCard, PageHeader, TextMenu } from "widgets.slint";
 
 // Para Pausa, Enfoque y Prisma mientras llegan a la versión Rust.
@@ -175,11 +177,10 @@ export component OptionsPage inherits VerticalLayout {
         }
     }
     if App.option-tab == 0: GeneralOptions { }
+    if App.option-tab == 1: TimerOptions { }
     if App.option-tab == 2: DisplayOptions { }
-    if App.option-tab == 1 || App.option-tab == 3 || App.option-tab == 4: InfoCard {
-        title: T.tr("rs_proximamente");
-        body: T.tr("rs_proximamente_texto");
-    }
+    if App.option-tab == 3: KeysOptions { }
+    if App.option-tab == 4: RulesOptions { }
 }
 
 export component AboutPage inherits VerticalLayout {

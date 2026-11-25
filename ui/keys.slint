@@ -1,0 +1,289 @@
+// Opciones › Atajos y Opciones › Reglas.
+
+import { Theme, T } from "theme.slint";
+import { Icons } from "icons.slint";
+import { Icon, CareButton, CareChip, ToggleRow, SectionCard, Stepper, TextMenu } from "widgets.slint";
+
+export struct HotkeyRow {
+    // Nombre del campo en config.json (incBrightness, read…).
+    name: string,
+    // Texto de la acción.
+    title: string,
+    // Combinación para mostrar ("Ctrl+Alt+↑"), o vacío.
+    keys: string,
+    // Otra app ya usa esta combinación.
+    failed: bool,
+}
+
+export global Keys {
+    in property <int> brightness-step: 5;
+    in property <int> kelvin-step: 200;
+    in property <[HotkeyRow]> rows;
+    // Atajo que se está grabando ("" = ninguno).
+    in-out property <string> capturing: "";
+    // Lo que se lleva pulsado mientras se graba (p. ej. "Ctrl+Alt+…").
+    in property <string> capture-preview: "";
+    callback set-step(string, int);
+    callback start-capture(string);
+    // nombre, texto de la tecla, Ctrl, Alt, Mayús, Win → true si ya quedó grabado.
+    callback capture(string, string, bool, bool, bool, bool) -> bool;
+    callback end-capture();
+    // Se soltó una tecla mientras se graba (para actualizar lo que se ve).
+    callback capture-release(bool, bool, bool, bool);
+    callback clear(string);
+
+    in property <bool> rules-enabled: false;
+    in property <bool> pause-fullscreen: false;
+    in property <[string]> rules;
+    in property <[string]> mode-names;
+    in-out property <string> new-query: "";
+    // 0 proceso, 1 clase, 2 título.
+    in-out property <int> new-kind: 0;
+    // 0 siempre, 1 solo a pantalla completa.
+    in-out property <int> new-condition: 0;
+    // Índice en el orden de la cuadrícula de perfiles (7 = Pausa).
+    in-out property <int> new-mode: 7;
+    // Último programa que estuvo en primer plano (para «Usar …»).
+    in property <string> last-window: "";
+    callback set-rules-bool(string, bool);
+    callback add-rule();
+    callback remove-rule(int);
+}
+
+export component HotkeyField inherits Rectangle {
+    in property <HotkeyRow> item;
+    property <bool> active: Keys.capturing == root.item.name;
+    border-radius: 12px;
+    background: Theme.o850;
+    border-width: 1px;
+    border-color: Theme.border-faint;
+    HorizontalLayout {
+        padding-left: 14px;
+        padding-right: 10px;
+        padding-top: 8px;
+        padding-bottom: 8px;
+        spacing: 8px;
+        Text {
+            horizontal-stretch: 1;
+            text: root.item.title;
+            font-size: 13px;
+            color: Theme.s200;
+            vertical-alignment: center;
+            overflow: elide;
+        }
+        keybox := Rectangle {
+            min-width: 150px;
+            height: 30px;
+            border-radius: 8px;
+            background: root.active ? Theme.tint : Theme.o700;
+            border-width: 1px;
+            border-color: root.active ? Theme.tint-border : root.item.failed ? Theme.amber300.with-alpha(0.6) : ta.has-hover ? Theme.hover-border : Theme.border-soft;
+            HorizontalLayout {
+                padding-left: 10px;
+                padding-right: 10px;
+                Text {
+                    text: root.active ? (Keys.capture-preview != "" ? Keys.capture-preview : T.tr("pulsa")) : root.item.keys == "" ? T.tr("sin_atajo") : root.item.keys;
+                    font-size: 12px;
+                    font-weight: 500;
+                    font-family: (root.item.keys != "" && !root.active) || (root.active && Keys.capture-preview != "") ? Theme.mono : "Inter";
+                    color: root.active ? Theme.e450 : root.item.keys == "" ? Theme.s500 : root.item.failed ? Theme.amber300 : Theme.s200;
+                    horizontal-alignment: center;
+                    vertical-alignment: center;
+                }
+            }
+            ta := TouchArea {
+                mouse-cursor: pointer;
+                clicked => {
+                    Keys.capturing = root.item.name;
+                    Keys.start-capture(root.item.name);
+                    fs.focus();
+                }
+            }
+        }
+        if root.item.keys != "" && !root.active: VerticalLayout {
+            alignment: center;
+            CareButton {
+                text: T.tr("borrar");
+                clicked => { Keys.clear(root.item.name); }
+            }
+        }
+    }
+    fs := FocusScope {
+        width: 0px;
+        height: 0px;
+        key-pressed(event) => {
+            if !root.active {
+                return reject;
+            }
+            if event.text == Key.Escape {
+                Keys.capturing = "";
+                Keys.end-capture();
+                return accept;
+            }
+            if Keys.capture(root.item.name, event.text, event.modifiers.control, event.modifiers.alt, event.modifiers.shift, event.modifiers.meta) {
+                Keys.capturing = "";
+                Keys.end-capture();
+            }
+            accept
+        }
+        key-released(event) => {
+            if !root.active {
+                return reject;
+            }
+            Keys.capture-release(event.modifiers.control, event.modifiers.alt, event.modifiers.shift, event.modifiers.meta);
+            accept
+        }
+    }
+}
+
+export component KeysOptions inherits VerticalLayout {
+    spacing: 8px;
+    SectionCard {
+        title: T.tr("atajos");
+        subtitle: T.tr("rs_atajos_texto");
+        Stepper {
+            label: T.tr("paso_de_brillo");
+            value: Keys.brightness-step;
+            minimum: 1;
+            maximum: 20;
+            suffix: " %";
+            changed(v) => { Keys.set-step("brightnessStep", v); }
+        }
+        Stepper {
+            label: T.tr("paso_de_color_k");
+            value: Keys.kelvin-step;
+            minimum: 50;
+            maximum: 1000;
+            step: 50;
+            suffix: " K";
+            changed(v) => { Keys.set-step("kelvinStep", v); }
+        }
+        for row in Keys.rows: HotkeyField {
+            item: row;
+        }
+    }
+}
+
+export component RulesOptions inherits VerticalLayout {
+    spacing: 8px;
+    property <[string]> kinds: [T.tr("proceso"), T.tr("clase"), T.tr("titulo")];
+    SectionCard {
+        title: T.tr("reglas");
+        subtitle: T.tr("si_la_ventana_activa_coincide_se_cambia_el_p");
+        ToggleRow {
+            title: T.tr("pausar_en_pantalla_completa");
+            subtitle: T.tr("cuando_un_programa_ocupa_el_monitor_el_filtr");
+            checked: Keys.pause-fullscreen;
+            toggled(on) => { Keys.set-rules-bool("pauseOnFullscreen", on); }
+        }
+        ToggleRow {
+            title: T.tr("usar_reglas_propias");
+            subtitle: T.tr("proceso_clase_de_ventana_o_titulo");
+            checked: Keys.rules-enabled;
+            toggled(on) => { Keys.set-rules-bool("enabled", on); }
+        }
+    }
+    if Keys.rules-enabled: SectionCard {
+        title: T.tr("rs_mis_reglas");
+        subtitle: Keys.rules.length == 0 ? T.tr("rs_sin_reglas") : "";
+        for rule[i] in Keys.rules: Rectangle {
+            border-radius: 12px;
+            background: Theme.o850;
+            border-width: 1px;
+            border-color: Theme.border-faint;
+            HorizontalLayout {
+                padding-left: 14px;
+                padding-right: 10px;
+                padding-top: 8px;
+                padding-bottom: 8px;
+                spacing: 8px;
+                Text {
+                    horizontal-stretch: 1;
+                    text: rule;
+                    font-size: 12px;
+                    color: Theme.s200;
+                    vertical-alignment: center;
+                    overflow: elide;
+                }
+                CareButton {
+                    text: T.tr("quitar");
+                    clicked => { Keys.remove-rule(i); }
+                }
+            }
+        }
+    }
+    if Keys.rules-enabled: SectionCard {
+        title: T.tr("rs_regla_nueva");
+        subtitle: T.tr("rs_regla_nueva_texto");
+        HorizontalLayout {
+            spacing: 8px;
+            Rectangle {
+                horizontal-stretch: 1;
+                height: 34px;
+                border-radius: 10px;
+                background: Theme.o850;
+                border-width: 1px;
+                border-color: query.has-focus ? Theme.e450.with-alpha(0.6) : Theme.border-mid;
+                query := TextInput {
+                    x: 10px;
+                    width: parent.width - 20px;
+                    text <=> Keys.new-query;
+                    font-size: 13px;
+                    color: Theme.s200;
+                    vertical-alignment: center;
+                    single-line: true;
+                    selection-background-color: Theme.e450.with-alpha(0.35);
+                }
+                if Keys.new-query == "": Text {
+                    x: 10px;
+                    text: T.tr("nombre");
+                    font-size: 13px;
+                    color: Theme.s500;
+                    vertical-alignment: center;
+                }
+            }
+            if Keys.last-window != "": CareButton {
+                text: T.tr1("rs_usar_ventana", Keys.last-window);
+                clicked => {
+                    Keys.new-query = Keys.last-window;
+                    Keys.new-kind = 0;
+                }
+            }
+        }
+        HorizontalLayout {
+            spacing: 6px;
+            alignment: start;
+            for k[i] in root.kinds: CareChip {
+                text: k;
+                selected: Keys.new-kind == i;
+                clicked => { Keys.new-kind = i; }
+            }
+            Rectangle { width: 12px; }
+            CareChip {
+                text: T.tr("siempre");
+                selected: Keys.new-condition == 0;
+                clicked => { Keys.new-condition = 0; }
+            }
+            CareChip {
+                text: T.tr("solo_completa");
+                selected: Keys.new-condition == 1;
+                clicked => { Keys.new-condition = 1; }
+            }
+        }
+        HorizontalLayout {
+            spacing: 8px;
+            TextMenu {
+                horizontal-stretch: 1;
+                options: Keys.mode-names;
+                current: Keys.new-mode;
+                picked(i) => { Keys.new-mode = i; }
+            }
+            CareButton {
+                text: T.tr("anadir");
+                icon: Icons.add;
+                enabled: Keys.new-query != "";
+                clicked => { Keys.add-rule(); }
+            }
+        }
+    }
+}

@@ -5,6 +5,10 @@
 //! acción sigue el mismo camino: modificar el estado → aplicar a las pantallas
 //! → `push()` para refrescar la interfaz.
 
+mod focus;
+mod keys;
+mod rest;
+
 use crate::color;
 use crate::config::{AppConfig, Mode, MonitorConfig};
 use crate::i18n;
@@ -43,12 +47,21 @@ struct State {
     lookup: i32,
     has_tray: bool,
     placed: bool,
+    /// Dónde estaba la ventana al ocultarla (Linux: el gestor de ventanas la
+    /// centraría al volver a mostrarla; Windows la deja donde estaba).
+    last_pos: Option<slint::PhysicalPosition>,
     /// Último periodo visto (día o noche), para cambiar la pestaña Día/Noche sola.
     last_night: Option<bool>,
     /// Vista previa del otro periodo: Some(true) = se muestra la noche aunque sea de día.
     preview: Option<bool>,
     /// Último cambio hecho durante la vista previa (se cierra sola tras un minuto quieta).
     last_touch: std::time::Instant,
+    /// Temporizador de pausas.
+    breaks: crate::breaks::Breaks,
+    /// Perfil que impone una regla por programa mientras su ventana está activa.
+    rule_override: Option<Mode>,
+    /// Último programa en primer plano (para crear reglas).
+    last_window: String,
 }
 
 thread_local! {
@@ -98,6 +111,21 @@ impl State {
         }
     }
 
+    /// Copia perfil y valores de la pantalla elegida a las demás.
+    fn copy_selected_to_all(&mut self) {
+        let source = self.current_id().and_then(|id| self.cfg.monitors.get(&id).cloned());
+        let Some(src) = source else { return };
+        for d in &self.displays {
+            if let Some(mc) = self.cfg.monitors.get_mut(&d.id) {
+                let (id, name, extra) = (mc.display_id.clone(), mc.display_name.clone(), mc.extra.clone());
+                *mc = src.clone();
+                mc.display_id = id;
+                mc.display_name = name;
+                mc.extra = extra;
+            }
+        }
+    }
+
     fn kelvin_bounds(&self) -> (i32, i32) {
         color::kelvin_range(self.cfg.wider_kelvin)
     }
@@ -109,7 +137,8 @@ impl State {
     /// Valores que tocan ahora según el perfil y la hora.
     fn wanted(&self, id: &str) -> (f64, f64) {
         let Some(mc) = self.cfg.monitors.get(id) else { return (100.0, 6500.0) };
-        let mode = mc.mode();
+        // Una regla activa manda sobre el perfil elegido (sin cambiarlo).
+        let mode = self.rule_override.unwrap_or_else(|| mc.mode());
         if mode == Mode::Pause {
             return (100.0, color::NEUTRAL_K as f64);
         }
@@ -313,6 +342,8 @@ fn apply(smooth: bool) {
 // ------------------------------------------------------------------ interfaz
 
 fn apply_theme(dark: bool, accent: i32) {
+    rest::apply_theme(dark, accent);
+    focus::apply_theme(dark, accent);
     if let Some(app) = ui() {
         let t = app.global::<Theme>();
         t.set_dark(dark);
@@ -407,23 +438,42 @@ fn push() {
         g.set_standard_gamma(c.standard_gamma);
         g.set_wider_kelvin(c.wider_kelvin);
         g.set_wider_brightness(c.wider_brightness);
-        g.set_sync_monitors(c.sync_monitors);
+        // Con una sola pantalla no hay «todas»: se muestra esa.
+        g.set_sync_monitors(c.sync_monitors && s.displays.len() > 1);
         g.set_close_to_tray(c.close_to_tray);
         g.set_start_in_tray(c.start_in_tray);
         g.set_reset_on_exit(c.reset_on_exit);
         g.set_d_lookup(s.lookup);
     });
     push_live();
+    rest::push();
+    keys::push();
+    focus::push();
+    #[cfg(any(target_os = "linux", target_os = "macos"))]
+    update_tray_menu();
 }
 
 fn update_tray_menu() {
     let (paused, label) = with(|s| (s.all_paused(), s.resume_label()));
+    #[cfg(target_os = "linux")]
+    crate::platform::linux::tray::update(tray_labels(paused, &label));
+    #[cfg(target_os = "macos")]
+    crate::platform::macos::tray::update(tray_labels(paused, &label));
     MENU.with(|m| {
         if let Some(menu) = m.borrow().as_ref() {
             menu.set_paused(paused);
             menu.set_resume_label(label.into());
         }
     });
+}
+
+#[cfg(any(target_os = "linux", target_os = "macos"))]
+fn tray_labels(paused: bool, resume: &str) -> platform::TrayLabels {
+    platform::TrayLabels {
+        show: i18n::tr("mostrar_ventana"),
+        pause: if paused { i18n::tr_args("reanudar_filtro", &[resume]) } else { i18n::tr("pausar_filtro") },
+        quit: i18n::tr("salir"),
+    }
 }
 
 fn wire_translations(t: T) {
@@ -457,9 +507,55 @@ fn preview_sun(app: &AppWindow) {
 
 // ------------------------------------------------------------------ ventanas
 
+/// Abajo a la derecha de la pantalla principal, sin tapar el panel (Linux).
+#[cfg(target_os = "linux")]
+fn linux_home_position(size: slint::PhysicalSize, scale: f32) -> Option<slint::PhysicalPosition> {
+    let (x, y, width, height) = crate::platform::linux::desk::work_rect()?;
+    // Antes de crear la ventana su tamaño aún es 0: se usa el de diseño.
+    let (w, h) = if size.width == 0 {
+        ((980.0 * scale) as i32, (700.0 * scale) as i32)
+    } else {
+        (size.width as i32, size.height as i32)
+    };
+    let margin = (8.0 * scale) as i32;
+    Some(slint::PhysicalPosition::new(x + width - w - margin, y + height - h - margin))
+}
+
 /// Muestra la ventana principal y la trae al frente.
 fn show_window() {
     let Some(app) = ui() else { return };
+    // macOS: abajo a la derecha, sin tapar el Dock. Se pide antes de crear la
+    // ventana; al ocultarla y mostrarla, macOS conserva su sitio.
+    #[cfg(target_os = "macos")]
+    if !with(|s| s.placed) {
+        if let Some((x, y, w, h)) = crate::platform::macos::desk::work_rect() {
+            let pos = slint::LogicalPosition::new((x + w - 980.0 - 8.0) as f32, (y + h - 700.0 - 8.0) as f32);
+            app.window().set_position(pos);
+        }
+    }
+    // La primera vez, la posición se pide antes de crear la ventana: el gestor
+    // de ventanas la recibe como elegida por el usuario y no la centra antes.
+    #[cfg(target_os = "linux")]
+    if !with(|s| s.placed) && with(|s| s.last_pos).is_none() {
+        if let Some(pos) = linux_home_position(app.window().size(), app.window().scale_factor()) {
+            app.window().set_position(pos);
+            // Si la ventana nativa ya existe (oculta), se marca la posición como elegida.
+            if let Some(id) = crate::platform::linux::desk::xid(app.window()) {
+                crate::platform::linux::desk::pin_position(id, pos.x, pos.y);
+            }
+            debug_log(&format!("primera vez: posición pedida {pos:?}, tamaño {:?}", app.window().size()));
+        }
+    }
+    #[cfg(target_os = "linux")]
+    if let Some(pos) = with(|s| s.last_pos) {
+        // Se fija la posición antes de mostrarla: así aparece directamente ahí.
+        // Si el gestor de ventanas no lo respeta, se queda donde él la ponga
+        // (sin moverla después, para que no salte de un sitio a otro).
+        app.window().set_position(pos);
+        if let Some(id) = crate::platform::linux::desk::xid(app.window()) {
+            crate::platform::linux::desk::pin_position(id, pos.x, pos.y);
+        }
+    }
     let _ = app.show();
     push();
     // La ventana nativa se crea cuando el bucle de eventos ya corre; antes de
@@ -488,6 +584,30 @@ fn finish_show() {
         }
         shell::bring_to_front(hwnd);
     }
+    #[cfg(target_os = "linux")]
+    {
+        use crate::platform::linux::desk;
+        let first = with(|s| !std::mem::replace(&mut s.placed, true));
+        if first {
+            // Ya se pidió esta posición antes de mostrarla; solo se corrige si el
+            // tamaño real resultó distinto del previsto.
+            if let Some(pos) = linux_home_position(app.window().size(), app.window().scale_factor()) {
+                if app.window().position() != pos {
+                    app.window().set_position(pos);
+                }
+            }
+        }
+        if let Some(id) = desk::xid(app.window()) {
+            desk::activate(id);
+        }
+    }
+    #[cfg(target_os = "macos")]
+    {
+        with(|s| s.placed = true);
+        // Trae la app al frente aunque estuviera en segundo plano.
+        use slint::winit_030::WinitWindowAccessor;
+        app.window().with_winit_window(|w| w.focus_window());
+    }
     let w = app.window();
     debug_log(&format!(
         "show: escala={} tamaño={:?} posición={:?} visible={}",
@@ -515,6 +635,8 @@ fn hide_or_quit() {
     let keep = with(|s| s.has_tray && s.cfg.close_to_tray);
     if keep {
         if let Some(app) = ui() {
+            let pos = app.window().position();
+            with(|s| s.last_pos = Some(pos));
             let _ = app.hide();
         }
     } else {
@@ -524,6 +646,8 @@ fn hide_or_quit() {
 
 fn quit() {
     stop_anim();
+    rest::stop();
+    focus::stop();
     stop_preview_timer();
     MENU_WATCH.with(|w| {
         if let Some(t) = w.borrow().as_ref() {
@@ -539,6 +663,16 @@ fn quit() {
     });
     #[cfg(windows)]
     crate::platform::windows::tray::remove();
+    #[cfg(target_os = "linux")]
+    {
+        crate::platform::linux::tray::remove();
+        crate::platform::linux::shell::release_instance();
+    }
+    #[cfg(target_os = "macos")]
+    {
+        crate::platform::macos::tray::remove();
+        crate::platform::macos::shell::release_instance();
+    }
     MENU.with(|m| {
         if let Some(menu) = m.borrow().as_ref() {
             let _ = menu.hide();
@@ -605,11 +739,17 @@ fn close_menu() {
     });
 }
 
-#[cfg(windows)]
-fn on_tray(ev: crate::platform::windows::tray::TrayEvent) {
-    use crate::platform::windows::tray::TrayEvent;
+fn on_tray(ev: platform::TrayEvent) {
+    use platform::TrayEvent;
     debug_log(&format!("bandeja: {ev:?}"));
     match ev {
+        TrayEvent::TogglePause => {
+            with(|s| s.toggle_pause());
+            apply(true);
+            push();
+        }
+        TrayEvent::Quit => quit(),
+        TrayEvent::Hotkey(id) => keys::on_hotkey(id),
         TrayEvent::Open | TrayEvent::ShowRequested => show_window(),
         TrayEvent::Menu(x, y) => open_tray_menu(x, y),
         TrayEvent::Resumed | TrayEvent::DisplaysChanged => {
@@ -637,7 +777,11 @@ pub fn run(start_hidden: bool) -> Result<(), slint::PlatformError> {
     let cfg = AppConfig::load();
     i18n::init(&cfg.language);
 
+    let breaks = crate::breaks::Breaks::new(&cfg.rest);
     let mut state = State {
+        breaks,
+        rule_override: None,
+        last_window: String::new(),
         cfg,
         backend: platform::backend(),
         displays: Vec::new(),
@@ -651,11 +795,22 @@ pub fn run(start_hidden: bool) -> Result<(), slint::PlatformError> {
         lookup: 0,
         has_tray: false,
         placed: false,
+        last_pos: None,
         last_night: None,
         preview: None,
         last_touch: std::time::Instant::now(),
     };
     state.refresh_displays();
+    // Una sola vez: «Todas las pantallas» pasa a ser lo normal, con los ajustes de la principal.
+    if !state.cfg.rs_sync_default {
+        state.cfg.rs_sync_default = true;
+        state.cfg.sync_monitors = true;
+        if let Some(i) = state.displays.iter().position(|d| d.primary) {
+            state.selected = i;
+        }
+        state.copy_selected_to_all();
+        state.dirty = true;
+    }
     if state.cfg.start_with_windows {
         // Reescribe la entrada por si el programa cambió de carpeta.
         platform::set_autostart(true);
@@ -663,6 +818,9 @@ pub fn run(start_hidden: bool) -> Result<(), slint::PlatformError> {
     let dark = state.dark();
     let accent = accent_index(&state.cfg.accent_theme);
     let check_updates = state.cfg.check_updates;
+    // Al iniciar sesión, la bandeja del escritorio puede no estar lista todavía.
+    #[cfg(target_os = "linux")]
+    let at_login = start_hidden;
     let start_hidden = start_hidden || state.cfg.start_in_tray;
     STATE.with(|s| *s.borrow_mut() = Some(state));
 
@@ -702,6 +860,10 @@ pub fn run(start_hidden: bool) -> Result<(), slint::PlatformError> {
     connect_dialog(&app);
     connect_options(&app);
     connect_window(&app);
+    rest::init(&app)?;
+    keys::init(&app);
+    focus::init(&app)?;
+    apply_theme(dark, accent);
 
     // Bandeja (COE_NOTRAY la desactiva, para diagnóstico)
     #[cfg(windows)]
@@ -709,7 +871,30 @@ pub fn run(start_hidden: bool) -> Result<(), slint::PlatformError> {
         let ok = crate::platform::windows::tray::create(TRAY_PNG, "CareOurEyes", on_tray);
         with(|s| s.has_tray = ok);
     }
-    #[cfg(not(windows))]
+    #[cfg(target_os = "linux")]
+    {
+        crate::platform::linux::set_handler(on_tray);
+        if std::env::var_os("COE_NOTRAY").is_none() {
+            let (paused, label) = with(|s| (s.all_paused(), s.resume_label()));
+            let ok = crate::platform::linux::tray::create(TRAY_PNG, tray_labels(paused, &label), at_login);
+            with(|s| s.has_tray = ok);
+        }
+    }
+    #[cfg(target_os = "macos")]
+    {
+        crate::platform::macos::set_handler(on_tray);
+        if std::env::var_os("COE_NOTRAY").is_none() {
+            // La barra de menús existe siempre en macOS; el icono se crea en
+            // cuanto arranca el bucle de eventos (antes no hay NSApplication).
+            with(|s| s.has_tray = true);
+            Timer::single_shot(Duration::ZERO, || {
+                let (paused, label) = with(|s| (s.all_paused(), s.resume_label()));
+                let ok = crate::platform::macos::tray::create(TRAY_PNG, tray_labels(paused, &label));
+                with(|s| s.has_tray = ok);
+            });
+        }
+    }
+    #[cfg(not(any(windows, target_os = "linux", target_os = "macos")))]
     let _ = TRAY_PNG;
 
     // Revisa el horario cada 30 s; guarda los cambios pendientes cada 1,5 s.
@@ -753,6 +938,9 @@ pub fn run(start_hidden: bool) -> Result<(), slint::PlatformError> {
         if num("COE_DIALOG").is_some() {
             g.invoke_open_dialog();
         }
+        if let Ok(what) = std::env::var("COE_BREAK") {
+            Timer::single_shot(Duration::from_millis(500), move || rest::debug_show(&what));
+        }
         if num("COE_MENU").is_some() {
             Timer::single_shot(Duration::from_millis(300), || open_tray_menu(900, 700));
         }
@@ -778,6 +966,9 @@ pub fn run(start_hidden: bool) -> Result<(), slint::PlatformError> {
     ANIM.with(|a| a.borrow_mut().take());
     MENU_WATCH.with(|w| w.borrow_mut().take());
     PREVIEW_TIMER.with(|w| w.borrow_mut().take());
+    rest::shutdown();
+    keys::shutdown();
+    focus::shutdown();
     MENU.with(|m| m.borrow_mut().take());
     UI.with(|u| u.borrow_mut().take());
     drop(app);
@@ -1151,7 +1342,14 @@ fn connect_options(app: &AppWindow) {
                     }
                     return true;
                 }
-                "syncMonitors" => c.sync_monitors = on,
+                "syncMonitors" => {
+                    c.sync_monitors = on;
+                    // Al juntar las pantallas, todas toman los ajustes de la elegida.
+                    if on {
+                        s.copy_selected_to_all();
+                    }
+                    return true;
+                }
                 "closeToTray" => c.close_to_tray = on,
                 "startInTray" => c.start_in_tray = on,
                 "resetOnExit" => c.reset_on_exit = on,
@@ -1185,6 +1383,22 @@ fn connect_window(app: &AppWindow) {
         }
     });
     g.on_close(hide_or_quit);
+    g.on_start_drag(|| {
+        #[cfg(not(windows))]
+        if let Some(app) = ui() {
+            use slint::winit_030::WinitWindowAccessor;
+            app.window().with_winit_window(|w| {
+                let _ = w.drag_window();
+            });
+            // El gestor de ventanas se queda con el ratón durante el arrastre y la
+            // app nunca recibe el «soltar». Sin esto, Slint cree que el botón sigue
+            // pulsado sobre la barra de título y no atiende nada más.
+            use slint::platform::{PointerEventButton, WindowEvent};
+            let position = slint::LogicalPosition::new(0.0, 0.0);
+            app.window().dispatch_event(WindowEvent::PointerReleased { position, button: PointerEventButton::Left });
+            app.window().dispatch_event(WindowEvent::PointerExited);
+        }
+    });
     // Alt+F4 o cerrar desde la barra de tareas.
     app.window().on_close_requested(|| {
         if !with(|s| s.has_tray && s.cfg.close_to_tray) {

@@ -11,8 +11,9 @@ color temperature, per-monitor day/night profiles. GPL-3.0.*
 ![Interfaz de CareOurEyes](docs/captura-ui.png)
 
 > **Versión 2 en desarrollo (alfa).** CareOurEyes se reescribió en **Rust + [Slint](https://slint.dev)**.
-> Por ahora es **solo para Windows** y todavía faltan los descansos, el modo enfoque y
-> Prisma ([ver el estado](#estado)).
+> Funciona en **Windows** y en **Linux con X11** (p. ej. Linux Mint Cinnamon). La versión
+> para **macOS** es experimental: compila, pero todavía nadie la ha probado en un Mac
+> ([ver el estado](#estado)).
 
 ## Descargar
 
@@ -22,9 +23,21 @@ Ve a **[Releases](https://github.com/DSGM-GMSD/CareOurEyes/releases)** y baja:
 |---------|----------|
 | `CareOurEyes-<versión>-setup.exe` | Instalador. Se instala en tu usuario, **sin permisos de administrador**, con acceso en el menú Inicio y desinstalador. |
 | `CareOurEyes-<versión>-portable.exe` | El programa solo, sin instalar. |
+| `careoureyes_<versión>_amd64.deb` | Linux Mint, Ubuntu, Debian: `sudo apt install ./careoureyes_<versión>_amd64.deb` |
+| `CareOurEyes-<versión>-linux-x86_64.tar.gz` | Linux, el programa solo. |
+| `CareOurEyes-<versión>-macos.dmg` | macOS 11 o posterior, Apple Silicon e Intel (experimental). |
 
-Windows 10/11 de 64 bits. Windows SmartScreen puede avisar porque el archivo no está
+**Windows** 10/11 de 64 bits. SmartScreen puede avisar porque el archivo no está
 firmado: «Más información» → «Ejecutar de todas formas».
+
+**Linux**: el brillo y el color necesitan una sesión **X11** (la normal en Linux Mint).
+En Wayland puro el sistema no deja cambiar la gamma desde otra app; ahí usa la luz
+nocturna del escritorio. El icono de la bandeja usa StatusNotifierItem (Cinnamon,
+KDE, XFCE, MATE; en GNOME, con la extensión AppIndicator).
+
+**macOS**: la app no está firmada por Apple. La primera vez, ábrela y luego ve a
+*Ajustes del Sistema › Privacidad y seguridad* y pulsa «Abrir igualmente». Desactiva
+Night Shift mientras la uses: los dos cambian la misma tabla de color.
 
 ### Verificar la descarga
 
@@ -83,14 +96,16 @@ suaves** en lugar de saltos. Al cerrar, devuelve la pantalla a como la encontró
 
 | Función | Windows | Linux | macOS |
 |---------|:-------:|:-----:|:-----:|
-| Brillo, temperatura, perfiles y Auto Día/Noche | ✅ | 🔜 | 🔜 |
-| Bandeja y arrancar al iniciar sesión | ✅ | 🔜 | 🔜 |
-| Descansos (20-20-20, Pomodoro) | 🔜 | 🔜 | 🔜 |
-| Enfoque y Prisma | 🔜 | — | — |
-| Atajos de teclado y reglas por app | 🔜 | — | — |
+| Brillo, temperatura, perfiles y Auto Día/Noche | ✅ | ✅ (X11) | 🧪 |
+| Bandeja y arrancar al iniciar sesión | ✅ | ✅ | 🧪 |
+| Descansos (20-20-20, Pomodoro) | ✅ | ✅ | 🧪 |
+| Atajos de teclado y reglas por app | ✅ | ✅ (X11) | 🧪 ¹ |
+| Enfoque y Prisma | ✅ | — | — |
 
-🔜 = planeado. Mientras tanto, los ajustes de esas secciones que ya existan en
-`config.json` se conservan intactos.
+🧪 = escrito, sin probar todavía en un equipo real. — = no disponible por ahora.
+¹ En macOS las reglas reconocen la app activa por su nombre o identificador, pero no
+el título de la ventana ni si está a pantalla completa. Los ajustes de secciones que un sistema
+no usa se conservan intactos en `config.json`.
 
 ---
 
@@ -121,6 +136,9 @@ CareOurEyes lo evita así:
 4. Al salir, **restaura** la base capturada tal cual.
 
 En Windows usa `CreateDC("DISPLAY", "\\.\DISPLAYn")` y `SetDeviceGammaRamp` (gdi32).
+En Linux usa la rampa de cada CRTC con RandR (`SetCrtcGamma`), que funciona con
+cualquier tamaño de tabla. En macOS, `CGSetDisplayTransferByTable` de CoreGraphics; al
+salir se recargan los perfiles de ColorSync.
 Windows limita cuánto puede oscurecer una rampa; si la función pública la rechaza,
 la app usa la variante de `mscms.dll`, salvo que actives
 **Opciones › Pantalla › Ajuste estándar**.
@@ -130,7 +148,11 @@ la app usa la variante de `mscms.dll`, salvo que actives
 ## Compilar desde el código
 
 Requisitos: [Rust](https://rustup.rs) 1.95 o superior y, en Windows, las *Build Tools*
-de Visual Studio (rustup las ofrece al instalar).
+de Visual Studio (rustup las ofrece al instalar). En Linux (Mint/Ubuntu/Debian):
+
+```bash
+sudo apt install build-essential pkg-config libfontconfig1-dev libxkbcommon-dev
+```
 
 ```bash
 cargo run --release      # ejecutar la app
@@ -138,8 +160,10 @@ cargo test               # pruebas
 ```
 
 El ejecutable queda en `target/release/CareOurEyes.exe`. Para arrancar oculto en la
-bandeja: `CareOurEyes.exe --autostart`. En Linux y macOS compila con un simulador de
-pantallas, útil para trabajar en la interfaz.
+bandeja: `CareOurEyes.exe --autostart`. `COE_SIM=1` usa un simulador de pantallas en
+Linux y macOS (útil para trabajar en la interfaz). Para el paquete `.deb`:
+`cargo install cargo-deb` y `cargo deb`. Para la app de macOS y su `.dmg`:
+`packaging/macos/build-app.sh <versión>` (en un Mac).
 
 | Carpeta | Contenido |
 | --- | --- |
@@ -148,15 +172,17 @@ pantallas, útil para trabajar en la interfaz.
 | `src/schedule.rs` | Horario día/noche y cálculo solar |
 | `src/i18n.rs`, `i18n/` | Traducciones |
 | `src/app.rs` | Estado de la app y conexión con la interfaz |
-| `src/platform/windows/` | Rampa gamma GDI, bandeja, autoarranque |
+| `src/platform/windows/` | Rampa gamma GDI, bandeja, autoarranque, Enfoque y Prisma |
+| `src/platform/linux/` | Gamma RandR, bandeja (StatusNotifierItem), atajos X11 |
+| `src/platform/macos/` | Gamma CoreGraphics, barra de menús, atajos (Carbon) |
 | `ui/` | Interfaz Slint |
-| `packaging/` | Instalador (Inno Setup) |
+| `packaging/` | Instalador (Inno Setup), `.desktop` de Linux, app de macOS y workflows |
 
 ### Publicar una versión
 
 La etiqueta es el acto de publicar. `.github/workflows/release.yml` hace el resto
 cuando se sube una etiqueta `v*`: comprueba que coincide con la versión de
-`Cargo.toml`, compila, crea el instalador y el portable, los atesta, escribe
+`Cargo.toml`, compila, crea el instalador, el portable, el `.deb`, el `.tar.gz` y el `.dmg`, los atesta, escribe
 `SHA256SUMS` y crea el release.
 
 1. Cambia `version` en `Cargo.toml` y compila una vez para que se actualice `Cargo.lock`.

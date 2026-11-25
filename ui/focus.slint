@@ -1,0 +1,377 @@
+// Enfoque (franja de lectura y velo del fondo) y Prisma (oscuro o gris en una ventana).
+
+import { Theme, T } from "theme.slint";
+import { Icons } from "icons.slint";
+import { App } from "state.slint";
+import { Icon, CareButton, CareChip, ToggleRow, SectionCard, PageHeader, GradientSlider, InfoCard } from "widgets.slint";
+import { HotkeyField, HotkeyRow } from "keys.slint";
+
+export global Focus {
+    // Enfoque y Prisma existen en este sistema (por ahora, solo Windows).
+    in property <bool> available: true;
+    // Colores que se pueden elegir (los mismos para todo) y el elegido de cada cosa.
+    in property <[color]> swatches: [#000000, #1E293B, #1E3A5F, #3B1F5E, #4A2C0A, #0F3D2E];
+    in property <int> band-color: 0;
+    in property <int> veil-color: 0;
+    in property <int> bar-color: 1;
+
+    in property <bool> band: false;
+    in property <int> band-height: 140;
+    in property <int> band-alpha: 55;
+    in property <bool> veil: false;
+    in property <int> veil-alpha: 60;
+    in property <bool> taskbar: false;
+    in property <bool> animate: true;
+    in property <int> duration: 250;
+    in property <bool> current-monitor: true;
+    in property <[HotkeyRow]> band-keys;
+    in property <[HotkeyRow]> veil-keys;
+
+    in property <bool> prisma: false;
+    in property <bool> toolbar: true;
+    // 1 izquierda, 2 derecha, 3 centro.
+    in property <int> place: 3;
+    in property <int> offset: 30;
+    in property <int> delay: 30;
+    // Texto de la ventana con Prisma ("" = ninguna).
+    in property <string> prisma-status: "";
+    in property <[HotkeyRow]> prisma-keys;
+
+    // Nombre del campo de config.json y su valor.
+    callback set-bool(string, bool);
+    callback set-int(string, int);
+    callback clear-prisma();
+}
+
+// Fila con nombre, valor y una barra deslizante.
+component SliderRow inherits VerticalLayout {
+    in property <string> label;
+    in property <string> readout;
+    in property <float> minimum;
+    in property <float> maximum;
+    in property <float> value;
+    callback changed(float);
+    callback released();
+    spacing: 4px;
+    HorizontalLayout {
+        Text {
+            horizontal-stretch: 1;
+            text: root.label;
+            font-size: 13px;
+            color: Theme.s200;
+        }
+        Text {
+            text: root.readout;
+            font-size: 13px;
+            font-weight: 500;
+            font-family: Theme.mono;
+            color: Theme.e450;
+        }
+    }
+    GradientSlider {
+        minimum: root.minimum;
+        maximum: root.maximum;
+        value: root.value;
+        gradient: @linear-gradient(90deg, Theme.b0[Theme.accent] 0%, Theme.b1[Theme.accent] 42%, Theme.b2[Theme.accent] 76%, Theme.b3[Theme.accent] 100%);
+        changed(v) => { root.changed(v); }
+        released => { root.released(); }
+    }
+}
+
+// Fila de colores para elegir.
+component ColorRow inherits HorizontalLayout {
+    in property <string> label;
+    in property <int> current;
+    callback picked(int);
+    spacing: 8px;
+    Text {
+        horizontal-stretch: 1;
+        text: root.label;
+        font-size: 13px;
+        color: Theme.s200;
+        vertical-alignment: center;
+    }
+    for c[i] in Focus.swatches: Rectangle {
+        width: 22px;
+        height: 22px;
+        border-radius: 11px;
+        background: c;
+        border-width: i == root.current ? 2px : 1px;
+        border-color: i == root.current ? Theme.e450 : Theme.border-strong;
+        TouchArea {
+            mouse-cursor: pointer;
+            clicked => { root.picked(i); }
+        }
+    }
+}
+
+export component FocusPage inherits VerticalLayout {
+    spacing: 8px;
+    alignment: start;
+    PageHeader {
+        icon: Icons.filter-center-focus;
+        title: T.tr("enfoque");
+        subtitle: T.tr("una_franja_clara_para_leer_o_un_velo_sobre_t");
+    }
+    if !Focus.available: InfoCard {
+        title: T.tr("rs_solo_windows");
+        body: T.tr("rs_solo_windows_texto");
+    }
+    if Focus.available: VerticalLayout {
+        spacing: 8px;
+    SectionCard {
+        title: T.tr("franja_de_lectura");
+        subtitle: T.tr("el_centro_de_la_pantalla_queda_libre_lo_de_a");
+        ToggleRow {
+            title: T.tr("activar_franja");
+            subtitle: T.tr2("altura_px_opacidad", Focus.band-height, Focus.band-alpha);
+            checked: Focus.band;
+            toggled(on) => { Focus.set-bool("bandEnabled", on); }
+        }
+        SliderRow {
+            label: T.tr("altura_de_la_franja");
+            readout: Focus.band-height + " px";
+            minimum: 60;
+            maximum: 600;
+            value: Focus.band-height;
+            changed(v) => { Focus.set-int("bandHeight", Math.round(v)); }
+        }
+        SliderRow {
+            label: T.tr("opacidad_del_velo");
+            readout: Focus.band-alpha + "%";
+            minimum: 10;
+            maximum: 95;
+            value: Focus.band-alpha;
+            changed(v) => { Focus.set-int("bandAlpha", Math.round(v)); }
+        }
+        ColorRow {
+            label: T.tr("color_del_velo");
+            current: Focus.band-color;
+            picked(i) => { Focus.set-int("bandColor", i); }
+        }
+        for row in Focus.band-keys: HotkeyField {
+            item: row;
+        }
+    }
+    SectionCard {
+        title: T.tr("velo_del_fondo");
+        subtitle: T.tr("oscurece_el_resto_de_ventanas_y_deja_libre_l");
+        ToggleRow {
+            title: T.tr("activar_velo");
+            subtitle: T.tr("la_ventana_activa_queda_descubierta");
+            checked: Focus.veil;
+            toggled(on) => { Focus.set-bool("blurEnabled", on); }
+        }
+        SliderRow {
+            label: T.tr("opacidad_del_velo");
+            readout: Focus.veil-alpha + "%";
+            minimum: 10;
+            maximum: 95;
+            value: Focus.veil-alpha;
+            changed(v) => { Focus.set-int("blurAlpha", Math.round(v)); }
+        }
+        ColorRow {
+            label: T.tr("color_de_fondo");
+            current: Focus.veil-color;
+            picked(i) => { Focus.set-int("blurColor", i); }
+        }
+        ToggleRow {
+            title: T.tr("incluir_la_barra_de_tareas");
+            subtitle: T.tr("si_esta_apagado_la_barra_se_queda_visible");
+            checked: Focus.taskbar;
+            toggled(on) => { Focus.set-bool("includeTaskbar", on); }
+        }
+        ToggleRow {
+            title: T.tr("solo_el_monitor_activo");
+            subtitle: T.tr("los_demas_monitores_no_se_oscurecen");
+            checked: Focus.current-monitor;
+            toggled(on) => { Focus.set-bool("currentMonitorOnly", on); }
+        }
+        ToggleRow {
+            title: T.tr("animar_el_cambio");
+            subtitle: T.tr1("el_velo_entra_en_ms", Focus.duration);
+            checked: Focus.animate;
+            toggled(on) => { Focus.set-bool("blurAnimate", on); }
+        }
+        if Focus.animate: SliderRow {
+            label: T.tr("duracion");
+            readout: Focus.duration + " ms";
+            minimum: 100;
+            maximum: 800;
+            value: Focus.duration;
+            changed(v) => { Focus.set-int("blurDurationMs", Math.round(v / 50) * 50); }
+        }
+        for row in Focus.veil-keys: HotkeyField {
+            item: row;
+        }
+    }
+    }
+}
+
+export component PrismaPage inherits VerticalLayout {
+    spacing: 8px;
+    alignment: start;
+    PageHeader {
+        icon: Icons.visibility;
+        title: T.tr("prisma");
+        subtitle: T.tr("oscurece_o_pone_en_gris_otra_ventana_posa_el");
+    }
+    if !Focus.available: InfoCard {
+        title: T.tr("rs_solo_windows");
+        body: T.tr("rs_solo_windows_texto");
+    }
+    if Focus.available: VerticalLayout {
+        spacing: 8px;
+    if Focus.prisma-status != "": Rectangle {
+        border-radius: 12px;
+        background: Theme.tint;
+        border-width: 1px;
+        border-color: Theme.tint-border;
+        HorizontalLayout {
+            padding: 10px;
+            spacing: 8px;
+            Text {
+                horizontal-stretch: 1;
+                text: Focus.prisma-status;
+                font-size: 12px;
+                color: Theme.e450;
+                vertical-alignment: center;
+            }
+            CareButton {
+                text: T.tr("quitar");
+                clicked => { Focus.clear-prisma(); }
+            }
+        }
+    }
+    SectionCard {
+        title: T.tr("otra_ventana");
+        subtitle: T.tr("el_color_solo_pinta_la_barra");
+        ToggleRow {
+            title: T.tr("activar_prisma");
+            subtitle: T.tr("la_barra_lo_usa_un_atajo_tambien_lo_enciende");
+            checked: Focus.prisma;
+            toggled(on) => { Focus.set-bool("prismaEnabled", on); }
+        }
+        ToggleRow {
+            title: T.tr("mostrar_la_barra");
+            subtitle: T.tr("si_se_apaga_solo_quedan_los_atajos");
+            checked: Focus.toolbar;
+            toggled(on) => { Focus.set-bool("showToolbar", on); }
+        }
+        ColorRow {
+            label: T.tr("color_de_la_barra");
+            current: Focus.bar-color;
+            picked(i) => { Focus.set-int("prismaColor", i); }
+        }
+        HorizontalLayout {
+            spacing: 6px;
+            Text {
+                horizontal-stretch: 1;
+                text: T.tr("barra");
+                font-size: 13px;
+                color: Theme.s200;
+                vertical-alignment: center;
+            }
+            CareChip {
+                text: T.tr("izquierda");
+                selected: Focus.place == 1;
+                clicked => { Focus.set-int("place", 1); }
+            }
+            CareChip {
+                text: T.tr("centro");
+                selected: Focus.place == 3;
+                clicked => { Focus.set-int("place", 3); }
+            }
+            CareChip {
+                text: T.tr("derecha");
+                selected: Focus.place == 2;
+                clicked => { Focus.set-int("place", 2); }
+            }
+        }
+        SliderRow {
+            label: T.tr("separacion_de_la_barra");
+            readout: (Focus.offset * 2) + " px";
+            minimum: 0;
+            maximum: 100;
+            value: Focus.offset;
+            changed(v) => { Focus.set-int("offset", Math.round(v)); }
+        }
+        SliderRow {
+            label: T.tr("espera_de_los_botones");
+            readout: Math.round(Focus.delay * 15) + " ms";
+            minimum: 0;
+            maximum: 100;
+            value: Focus.delay;
+            changed(v) => { Focus.set-int("delay", Math.round(v)); }
+        }
+        for row in Focus.prisma-keys: HotkeyField {
+            item: row;
+        }
+    }
+    }
+}
+
+// Barra pequeña sobre el título de una ventana: oscuro, gris, quitar.
+export component PrismaBar inherits Window {
+    in property <color> bar: #1E293B;
+    in property <bool> applied: false;
+    // Modo aplicado a la ventana bajo la barra: 0 nada, 1 oscuro, 2 gris.
+    in property <int> current: 0;
+    callback dark();
+    callback gray();
+    callback clear();
+    property <color> ink: bar.to-hsv().value > 0.6 ? #0F172A : #ffffff;
+
+    title: "CareOurEyes Prisma";
+    no-frame: true;
+    always-on-top: true;
+    background: root.bar;
+    default-font-family: "Inter";
+
+    HorizontalLayout {
+        padding: 4px;
+        spacing: 4px;
+        for b[i] in [
+            { icon: Icons.dark-mode, label: T.tr("oscuro") },
+            { icon: Icons.filter-center-focus, label: T.tr("gris") },
+            { icon: Icons.close, label: T.tr("quitar") },
+        ]: Rectangle {
+            visible: i < 2 || root.applied;
+            width: i < 2 || root.applied ? lay.preferred-width : 0px;
+            height: 28px;
+            border-radius: 6px;
+            background: (i == 0 && root.current == 1) || (i == 1 && root.current == 2) ? root.ink.with-alpha(0.22)
+                : ta.has-hover ? root.ink.with-alpha(0.12) : transparent;
+            lay := HorizontalLayout {
+                padding-left: 8px;
+                padding-right: 10px;
+                spacing: 6px;
+                Icon {
+                    y: (parent.height - self.height) / 2;
+                    commands: b.icon;
+                    size: 14px;
+                    tint: root.ink;
+                }
+                Text {
+                    text: b.label;
+                    font-size: 12px;
+                    font-weight: 500;
+                    color: root.ink;
+                    vertical-alignment: center;
+                }
+            }
+            ta := TouchArea {
+                mouse-cursor: pointer;
+                clicked => {
+                    if i == 0 {
+                        root.dark();
+                    } else if i == 1 {
+                        root.gray();
+                    } else {
+                        root.clear();
+                    }
+                }
+            }
+        }
+    }
+}

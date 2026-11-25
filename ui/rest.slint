@@ -1,0 +1,544 @@
+// Pausas para la vista: la página Pausa, la pestaña Opciones › Temporizador,
+// el aviso pequeño y la pausa a pantalla completa.
+
+import { Theme, T } from "theme.slint";
+import { Icons } from "icons.slint";
+import { App } from "state.slint";
+import { Icon, IconBox, CareCard, CareButton, CareChip, CareSwitch, ToggleRow, SectionCard, PageHeader, TextMenu, Stepper } from "widgets.slint";
+
+// ---------------------------------------------------------------- estado
+
+export global Rest {
+    in property <bool> enabled: false;
+    // Fase: 0 trabajo, 1 pausa corta, 2 pausa larga.
+    in property <int> phase: 0;
+    in property <bool> paused: false;
+    // La pausa espera a que termine una pantalla completa.
+    in property <bool> held: false;
+    in property <string> countdown: "--:--";
+    in property <string> status: "";
+    // 0..1 de la fase actual.
+    in property <float> progress: 0;
+    in property <bool> next-long: false;
+
+    in property <int> work: 45;
+    in property <int> short: 5;
+    in property <int> long: 15;
+    in property <int> every: 4;
+    in property <bool> pomodoro: false;
+    // 0 suave, 1 pantalla completa, 2 estricta.
+    in property <int> style: 0;
+    in property <bool> blink: false;
+    in property <int> blink-every: 20;
+
+    in property <int> warn-seconds: 30;
+    in property <bool> place-top: true;
+    in property <bool> sound: false;
+    in property <bool> allow-delay: true;
+    in property <int> delay-times: 3;
+    in property <int> delay-minutes: 5;
+    in property <bool> idle: true;
+    in property <int> idle-minutes: 5;
+    in property <bool> dnd: true;
+
+    callback set-enabled(bool);
+    // Nombre del campo de config.json y su nuevo valor.
+    callback set-int(string, int);
+    callback set-bool(string, bool);
+    callback take-break();
+    // Minutos; 0 = hasta reanudar.
+    callback pause(int);
+    callback resume();
+    callback restart();
+}
+
+// ---------------------------------------------------------------- página Pausa
+
+export component RestPage inherits VerticalLayout {
+    property <[int]> pause-minutes: [15, 30, 60, 120, 0];
+    spacing: 8px;
+    alignment: start;
+
+    HorizontalLayout {
+        PageHeader {
+            icon: Icons.timer;
+            title: T.tr("recordatorio_de_pausa");
+            subtitle: T.tr("rs_pausa_resumen");
+        }
+        Rectangle { horizontal-stretch: 1; }
+        VerticalLayout {
+            alignment: center;
+            CareSwitch {
+                checked: Rest.enabled;
+                toggled(on) => { Rest.set-enabled(on); }
+            }
+        }
+    }
+
+    if Rest.enabled: CareCard {
+        pad: 16px;
+        gap: 12px;
+        HorizontalLayout {
+            spacing: 16px;
+            VerticalLayout {
+                horizontal-stretch: 1;
+                alignment: center;
+                spacing: 2px;
+                Text {
+                    text: Rest.status;
+                    font-size: 11px;
+                    font-weight: 600;
+                    letter-spacing: 0.6px;
+                    color: Theme.s400;
+                    wrap: word-wrap;
+                }
+                Text {
+                    text: Rest.countdown;
+                    font-size: 34px;
+                    font-weight: 700;
+                    font-family: Theme.mono;
+                    color: Rest.paused ? Theme.s400 : Rest.phase == 0 ? Theme.e450 : Theme.amber300;
+                }
+            }
+            VerticalLayout {
+                alignment: center;
+                spacing: 8px;
+                HorizontalLayout {
+                    spacing: 8px;
+                    alignment: end;
+                    if Rest.phase == 0: CareButton {
+                        text: T.tr("rs_descansar_ahora");
+                        icon: Icons.visibility;
+                        clicked => { Rest.take-break(); }
+                    }
+                    CareButton {
+                        text: T.tr("rs_reiniciar");
+                        icon: Icons.restart-alt;
+                        clicked => { Rest.restart(); }
+                    }
+                }
+                HorizontalLayout {
+                    alignment: end;
+                    if Rest.paused: CareButton {
+                        text: T.tr("reanudar");
+                        clicked => { Rest.resume(); }
+                    }
+                    if !Rest.paused: TextMenu {
+                        width: 210px;
+                        placeholder: T.tr("rs_pausar_menu");
+                        current: -1;
+                        options: [
+                            T.tr1("pausar_min", "15"),
+                            T.tr1("pausar_min", "30"),
+                            T.tr1("pausar_min", "60"),
+                            T.tr1("pausar_min", "120"),
+                            T.tr("indefinidamente"),
+                        ];
+                        picked(i) => { Rest.pause(root.pause-minutes[i]); }
+                    }
+                }
+            }
+        }
+        // Barra de progreso de la fase actual.
+        Rectangle {
+            height: 6px;
+            border-radius: 3px;
+            background: Theme.dark ? Theme.o950 : Theme.o750;
+            Rectangle {
+                x: 0;
+                width: parent.width * max(0, min(1, Rest.progress));
+                border-radius: 3px;
+                background: Rest.phase == 0 ? Theme.e450 : Theme.amber300;
+                animate width { duration: 400ms; }
+            }
+        }
+    }
+
+    if Rest.enabled: SectionCard {
+        title: T.tr("rs_tiempos");
+        subtitle: T.tr("rs_tiempos_texto");
+        Stepper {
+            label: T.tr("rs_trabajo_min");
+            value: Rest.work;
+            minimum: 5;
+            maximum: 180;
+            step: 5;
+            suffix: " min";
+            changed(v) => { Rest.set-int("workMinutes", v); }
+        }
+        Stepper {
+            label: T.tr("rs_pausa_corta_min");
+            value: Rest.short;
+            minimum: 1;
+            maximum: 30;
+            suffix: " min";
+            changed(v) => { Rest.set-int("shortBreakMinutes", v); }
+        }
+        ToggleRow {
+            title: T.tr("rs_pomodoro");
+            subtitle: T.tr("rs_pomodoro_texto");
+            checked: Rest.pomodoro;
+            toggled(on) => { Rest.set-bool("pomodoro", on); }
+        }
+        if Rest.pomodoro: Stepper {
+            label: T.tr("rs_pausa_larga_min");
+            value: Rest.long;
+            minimum: 5;
+            maximum: 60;
+            step: 5;
+            suffix: " min";
+            changed(v) => { Rest.set-int("longBreakMinutes", v); }
+        }
+        if Rest.pomodoro: Stepper {
+            label: T.tr("rs_cada_sesiones");
+            value: Rest.every;
+            minimum: 2;
+            maximum: 8;
+            changed(v) => { Rest.set-int("longBreakEvery", v); }
+        }
+    }
+
+    if Rest.enabled: SectionCard {
+        title: T.tr("modo_de_pausa");
+        subtitle: Rest.style == 0 ? T.tr("rs_modo_suave_texto") : Rest.style == 1 ? T.tr("rs_modo_completa_texto") : T.tr("rs_modo_estricta_texto");
+        HorizontalLayout {
+            spacing: 6px;
+            alignment: start;
+            CareChip {
+                text: T.tr("suave");
+                selected: Rest.style == 0;
+                clicked => { Rest.set-int("breakStyle", 0); }
+            }
+            CareChip {
+                text: T.tr("pantalla_completa");
+                selected: Rest.style == 1;
+                clicked => { Rest.set-int("breakStyle", 1); }
+            }
+            CareChip {
+                text: T.tr("estricta");
+                selected: Rest.style == 2;
+                clicked => { Rest.set-int("breakStyle", 2); }
+            }
+            Rectangle { horizontal-stretch: 1; }
+            CareButton {
+                text: T.tr("vista_previa");
+                clicked => { Rest.take-break(); }
+            }
+        }
+    }
+
+    if Rest.enabled: ToggleRow {
+        title: T.tr("recordatorio_de_parpadeo");
+        subtitle: T.tr1("rs_parpadeo_texto", Rest.blink-every);
+        checked: Rest.blink;
+        toggled(on) => { Rest.set-bool("blinkEnabled", on); }
+    }
+    if Rest.enabled && Rest.blink: Rectangle {
+        border-radius: 12px;
+        background: Theme.o850;
+        border-width: 1px;
+        border-color: Theme.border-faint;
+        HorizontalLayout {
+            padding-left: 14px;
+            padding-right: 14px;
+            padding-top: 10px;
+            padding-bottom: 10px;
+            Stepper {
+                label: T.tr("avisar_cada");
+                value: Rest.blink-every;
+                minimum: 5;
+                maximum: 60;
+                step: 5;
+                suffix: " min";
+                changed(v) => { Rest.set-int("blinkIntervalMinutes", v); }
+            }
+        }
+    }
+
+    if Rest.enabled: HorizontalLayout {
+        alignment: start;
+        CareButton {
+            text: T.tr("rs_mas_opciones");
+            icon: Icons.settings;
+            clicked => {
+                App.option-tab = 1;
+                App.page = 4;
+            }
+        }
+    }
+}
+
+// ---------------------------------------------------------------- Opciones › Temporizador
+
+export component TimerOptions inherits VerticalLayout {
+    spacing: 8px;
+    SectionCard {
+        title: T.tr("rs_avisos");
+        subtitle: T.tr("rs_avisos_texto");
+        Stepper {
+            label: T.tr("rs_aviso_previo_s");
+            subtitle: T.tr("rs_aviso_previo_texto");
+            value: Rest.warn-seconds;
+            minimum: 0;
+            maximum: 120;
+            step: 15;
+            suffix: " s";
+            changed(v) => { Rest.set-int("preBreakSeconds", v); }
+        }
+        Text {
+            text: T.tr("posicion_del_aviso");
+            font-size: 13px;
+            color: Theme.s200;
+        }
+        HorizontalLayout {
+            spacing: 6px;
+            alignment: start;
+            CareChip {
+                text: T.tr("arriba");
+                selected: Rest.place-top;
+                clicked => { Rest.set-bool("promptTop", true); }
+            }
+            CareChip {
+                text: T.tr("abajo");
+                selected: !Rest.place-top;
+                clicked => { Rest.set-bool("promptTop", false); }
+            }
+        }
+        ToggleRow {
+            title: T.tr("rs_sonido");
+            subtitle: T.tr("rs_sonido_texto");
+            checked: Rest.sound;
+            toggled(on) => { Rest.set-bool("alertSound", on); }
+        }
+    }
+    SectionCard {
+        title: T.tr("rs_posponer");
+        subtitle: T.tr("rs_posponer_texto");
+        ToggleRow {
+            title: T.tr("rs_permitir_posponer");
+            subtitle: "";
+            checked: Rest.allow-delay;
+            toggled(on) => { Rest.set-bool("allowDelay", on); }
+        }
+        if Rest.allow-delay: Stepper {
+            label: T.tr("rs_veces_seguidas");
+            value: Rest.delay-times;
+            minimum: 1;
+            maximum: 5;
+            changed(v) => { Rest.set-int("delayTimesMax", v); }
+        }
+        if Rest.allow-delay: Stepper {
+            label: T.tr("rs_minutos_posponer");
+            value: Rest.delay-minutes;
+            minimum: 1;
+            maximum: 30;
+            suffix: " min";
+            changed(v) => { Rest.set-int("delayMinutes", v); }
+        }
+    }
+    SectionCard {
+        title: T.tr("rs_automatico");
+        subtitle: "";
+        ToggleRow {
+            title: T.tr("rs_ausente");
+            subtitle: T.tr("rs_ausente_texto");
+            checked: Rest.idle;
+            toggled(on) => { Rest.set-bool("pauseWhenIdle", on); }
+        }
+        if Rest.idle: Stepper {
+            label: T.tr("rs_ausente_min");
+            value: Rest.idle-minutes;
+            minimum: 1;
+            maximum: 30;
+            suffix: " min";
+            changed(v) => { Rest.set-int("pauseIdleMinutes", v); }
+        }
+        ToggleRow {
+            title: T.tr("no_molestar_a_pantalla_completa");
+            subtitle: T.tr("la_pausa_espera_a_que_salgas_de_la_ventana_c");
+            checked: Rest.dnd;
+            toggled(on) => { Rest.set-bool("doNotDisturbFullscreen", on); }
+        }
+    }
+}
+
+// ---------------------------------------------------------------- aviso pequeño
+
+export component BreakToast inherits Window {
+    // 0 aviso previo, 1 pausa suave, 2 parpadeo (20-20-20).
+    in property <int> kind: 0;
+    in property <string> heading;
+    in property <string> detail;
+    in property <string> countdown;
+    in property <bool> can-delay: true;
+    in property <string> delay-text: "+5 min";
+    callback take-break();
+    callback delay();
+    callback skip();
+    callback dismiss();
+
+    title: "CareOurEyes";
+    no-frame: true;
+    always-on-top: true;
+    width: 400px;
+    background: Theme.o800;
+    default-font-family: "Inter";
+
+    Rectangle {
+        border-width: 1px;
+        border-color: Theme.border-soft;
+        border-radius: 8px;
+    }
+    VerticalLayout {
+        padding: 14px;
+        spacing: 12px;
+        HorizontalLayout {
+            spacing: 12px;
+            IconBox {
+                icon: root.kind == 2 ? Icons.visibility : Icons.timer;
+                size: 40px;
+                tint: root.kind == 1 ? Theme.amber300 : Theme.e450;
+                fill: (root.kind == 1 ? Theme.amber300 : Theme.e450).with-alpha(0.12);
+                line: (root.kind == 1 ? Theme.amber300 : Theme.e450).with-alpha(0.3);
+            }
+            VerticalLayout {
+                horizontal-stretch: 1;
+                alignment: center;
+                Text {
+                    text: root.heading;
+                    font-size: 14px;
+                    font-weight: 600;
+                    color: Theme.s200;
+                    wrap: word-wrap;
+                }
+                Text {
+                    text: root.detail;
+                    font-size: 12px;
+                    color: Theme.s400;
+                    wrap: word-wrap;
+                }
+            }
+            Text {
+                text: root.countdown;
+                font-size: 20px;
+                font-weight: 700;
+                font-family: Theme.mono;
+                color: root.kind == 1 ? Theme.amber200 : Theme.e450;
+                vertical-alignment: center;
+            }
+        }
+        HorizontalLayout {
+            spacing: 8px;
+            alignment: end;
+            if root.kind == 0: CareButton {
+                text: T.tr("rs_descansar_ahora");
+                clicked => { root.take-break(); }
+            }
+            if root.kind != 2 && root.can-delay: CareButton {
+                text: root.delay-text;
+                clicked => { root.delay(); }
+            }
+            if root.kind != 2: CareButton {
+                text: T.tr("saltar");
+                clicked => { root.skip(); }
+            }
+            if root.kind == 2: CareButton {
+                text: T.tr("rs_listo");
+                clicked => { root.dismiss(); }
+            }
+        }
+    }
+}
+
+// ---------------------------------------------------------------- pausa a pantalla completa
+
+export component BreakOverlay inherits Window {
+    in property <string> heading;
+    in property <string> countdown;
+    in property <string> tip;
+    in property <float> progress: 0;
+    in property <bool> strict: false;
+    in property <bool> can-delay: true;
+    in property <string> delay-text: "+5 min";
+    callback delay();
+    callback skip();
+
+    title: "CareOurEyes";
+    no-frame: true;
+    always-on-top: true;
+    background: Theme.dark ? #070A0D : #F4F6F9;
+    default-font-family: "Inter";
+
+    VerticalLayout {
+        alignment: center;
+        spacing: 18px;
+        HorizontalLayout {
+            alignment: center;
+            IconBox {
+                icon: Icons.visibility;
+                size: 72px;
+                radius: 22px;
+                tint: Theme.amber300;
+                fill: Theme.amber300.with-alpha(0.12);
+                line: Theme.amber300.with-alpha(0.3);
+            }
+        }
+        Text {
+            text: root.heading;
+            font-size: 28px;
+            font-weight: 600;
+            color: Theme.s200;
+            horizontal-alignment: center;
+        }
+        Text {
+            text: root.countdown;
+            font-size: 72px;
+            font-weight: 700;
+            font-family: Theme.mono;
+            color: Theme.amber200;
+            horizontal-alignment: center;
+        }
+        HorizontalLayout {
+            alignment: center;
+            Rectangle {
+                width: 320px;
+                height: 6px;
+                border-radius: 3px;
+                background: Theme.dark ? #ffffff14 : #0F172A14;
+                Rectangle {
+                    x: 0;
+                    width: parent.width * max(0, min(1, root.progress));
+                    border-radius: 3px;
+                    background: Theme.amber300;
+                    animate width { duration: 900ms; }
+                }
+            }
+        }
+        Text {
+            text: root.tip;
+            font-size: 16px;
+            color: Theme.s300;
+            horizontal-alignment: center;
+            wrap: word-wrap;
+        }
+        Rectangle { height: 8px; }
+        if !root.strict: HorizontalLayout {
+            alignment: center;
+            spacing: 10px;
+            if root.can-delay: CareButton {
+                text: root.delay-text;
+                clicked => { root.delay(); }
+            }
+            CareButton {
+                text: T.tr("saltar_pausa");
+                clicked => { root.skip(); }
+            }
+        }
+        if root.strict: Text {
+            text: T.tr("rs_estricta_nota");
+            font-size: 12px;
+            color: Theme.s500;
+            horizontal-alignment: center;
+        }
+    }
+}

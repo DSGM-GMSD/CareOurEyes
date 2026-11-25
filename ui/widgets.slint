@@ -533,6 +533,8 @@ export component PageHeader {
 export component TextMenu inherits Rectangle {
     in property <[string]> options;
     in property <int> current;
+    // Texto cuando no hay opción elegida (current = -1), p. ej. «Pausar…».
+    in property <string> placeholder;
     in property <length> menu-width: 260px;
     callback picked(int);
     height: 34px;
@@ -546,7 +548,7 @@ export component TextMenu inherits Rectangle {
         spacing: 8px;
         Text {
             horizontal-stretch: 1;
-            text: root.current >= 0 && root.current < root.options.length ? root.options[root.current] : "";
+            text: root.current >= 0 && root.current < root.options.length ? root.options[root.current] : root.placeholder;
             font-size: 12px;
             font-weight: 500;
             color: Theme.s200;

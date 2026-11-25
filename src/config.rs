@@ -216,6 +216,312 @@ impl Default for ScheduleConfig {
     }
 }
 
+/// Recordatorio de pausas para la vista.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", default)]
+pub struct RestConfig {
+    pub enabled: bool,
+    /// Minutos de trabajo entre pausas.
+    pub work_minutes: i32,
+    pub short_break_minutes: i32,
+    /// Archivos antiguos: si es verdadero, `short_break_minutes` está en segundos.
+    pub short_break_seconds: bool,
+    pub long_break_minutes: i32,
+    /// La pausa larga sustituye a la corta cada N sesiones de trabajo.
+    pub long_break_every: i32,
+    /// Con esto apagado todas las pausas son cortas.
+    pub pomodoro: bool,
+    /// Recordatorio 20-20-20: cada N minutos, 20 s mirando a lo lejos.
+    pub blink_enabled: bool,
+    pub blink_interval_minutes: i32,
+    /// Aviso antes de la pausa (0 = sin aviso).
+    pub pre_break_seconds: i32,
+    pub allow_delay: bool,
+    pub delay_times_max: i32,
+    pub delay_minutes: i32,
+    /// "light" (aviso), "fullscreen" (se puede saltar) o "strict" (no se salta).
+    pub break_style: String,
+    /// "top" o "bottom": dónde sale el aviso.
+    pub prompt_place: String,
+    /// Detener el temporizador si no se usa el equipo; si la ausencia dura más
+    /// que una pausa corta, al volver cuenta como descanso.
+    pub pause_when_idle: bool,
+    pub pause_idle_amount: i32,
+    /// "minutes" o "seconds".
+    pub pause_idle_unit: String,
+    /// Esperar a que termine la pantalla completa (juegos, películas, presentaciones).
+    pub do_not_disturb_fullscreen: bool,
+    pub alert_sound: bool,
+    #[serde(flatten)]
+    pub extra: Map<String, Value>,
+}
+
+impl Default for RestConfig {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            work_minutes: 45,
+            short_break_minutes: 5,
+            short_break_seconds: false,
+            long_break_minutes: 15,
+            long_break_every: 4,
+            pomodoro: false,
+            blink_enabled: false,
+            blink_interval_minutes: 20,
+            pre_break_seconds: 30,
+            allow_delay: true,
+            delay_times_max: 3,
+            delay_minutes: 5,
+            break_style: "light".into(),
+            prompt_place: "top".into(),
+            pause_when_idle: true,
+            pause_idle_amount: 5,
+            pause_idle_unit: "minutes".into(),
+            do_not_disturb_fullscreen: true,
+            alert_sound: false,
+            extra: Map::new(),
+        }
+    }
+}
+
+impl RestConfig {
+    pub fn short_break_ms(&self) -> i64 {
+        let n = self.short_break_minutes.max(1) as i64;
+        if self.short_break_seconds { n * 1000 } else { n * 60_000 }
+    }
+
+    pub fn idle_ms(&self) -> i64 {
+        let n = self.pause_idle_amount.max(1) as i64;
+        if self.pause_idle_unit == "seconds" { n * 1000 } else { n * 60_000 }
+    }
+}
+
+/// Atajos de teclado globales. Cada uno se guarda como "modificadores|tecla"
+/// (los valores de Windows: Alt 1, Ctrl 2, Mayús 4, Win 8; tecla = código virtual).
+/// "0|0" = sin atajo.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", default)]
+pub struct HotkeyConfig {
+    /// Cuánto cambia el brillo (%) y la temperatura (K) con cada pulsación.
+    pub brightness_step: i32,
+    pub kelvin_step: i32,
+    pub inc_brightness: String,
+    pub dec_brightness: String,
+    pub inc_kelvin: String,
+    pub dec_kelvin: String,
+    pub toggle_temperature: String,
+    pub toggle_pause: String,
+    pub read: String,
+    pub edit: String,
+    pub game: String,
+    pub movie: String,
+    pub health: String,
+    pub office: String,
+    pub custom: String,
+    pub toggle_band: String,
+    pub toggle_veil: String,
+    pub prisma_dark: String,
+    pub prisma_gray: String,
+    #[serde(flatten)]
+    pub extra: Map<String, Value>,
+}
+
+impl Default for HotkeyConfig {
+    fn default() -> Self {
+        let none = || "0|0".to_string();
+        Self {
+            brightness_step: 5,
+            kelvin_step: 200,
+            inc_brightness: none(),
+            dec_brightness: none(),
+            inc_kelvin: none(),
+            dec_kelvin: none(),
+            toggle_temperature: none(),
+            toggle_pause: none(),
+            read: none(),
+            edit: none(),
+            game: none(),
+            movie: none(),
+            health: none(),
+            office: none(),
+            custom: none(),
+            toggle_band: none(),
+            toggle_veil: none(),
+            prisma_dark: none(),
+            prisma_gray: none(),
+            extra: Map::new(),
+        }
+    }
+}
+
+impl HotkeyConfig {
+    /// Nombres (los del JSON) en el orden en que se muestran.
+    pub const NAMES: [&'static str; 17] = [
+        "incBrightness",
+        "decBrightness",
+        "incKelvin",
+        "decKelvin",
+        "toggleTemperature",
+        "togglePause",
+        "read",
+        "edit",
+        "game",
+        "movie",
+        "health",
+        "office",
+        "custom",
+        "toggleBand",
+        "toggleVeil",
+        "prismaDark",
+        "prismaGray",
+    ];
+
+    pub fn get(&self, name: &str) -> &str {
+        match name {
+            "incBrightness" => &self.inc_brightness,
+            "decBrightness" => &self.dec_brightness,
+            "incKelvin" => &self.inc_kelvin,
+            "decKelvin" => &self.dec_kelvin,
+            "toggleTemperature" => &self.toggle_temperature,
+            "togglePause" => &self.toggle_pause,
+            "read" => &self.read,
+            "edit" => &self.edit,
+            "game" => &self.game,
+            "movie" => &self.movie,
+            "health" => &self.health,
+            "office" => &self.office,
+            "custom" => &self.custom,
+            "toggleBand" => &self.toggle_band,
+            "toggleVeil" => &self.toggle_veil,
+            "prismaDark" => &self.prisma_dark,
+            "prismaGray" => &self.prisma_gray,
+            _ => "0|0",
+        }
+    }
+
+    pub fn set(&mut self, name: &str, value: String) {
+        let slot = match name {
+            "incBrightness" => &mut self.inc_brightness,
+            "decBrightness" => &mut self.dec_brightness,
+            "incKelvin" => &mut self.inc_kelvin,
+            "decKelvin" => &mut self.dec_kelvin,
+            "toggleTemperature" => &mut self.toggle_temperature,
+            "togglePause" => &mut self.toggle_pause,
+            "read" => &mut self.read,
+            "edit" => &mut self.edit,
+            "game" => &mut self.game,
+            "movie" => &mut self.movie,
+            "health" => &mut self.health,
+            "office" => &mut self.office,
+            "custom" => &mut self.custom,
+            "toggleBand" => &mut self.toggle_band,
+            "toggleVeil" => &mut self.toggle_veil,
+            "prismaDark" => &mut self.prisma_dark,
+            "prismaGray" => &mut self.prisma_gray,
+            _ => return,
+        };
+        *slot = value;
+    }
+}
+
+/// Una regla: si la ventana activa coincide, se usa otro perfil mientras siga activa.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", default)]
+pub struct AppRule {
+    /// Nombre del programa (p. ej. "vlc.exe"), clase de ventana o parte del título.
+    pub query: String,
+    /// "process", "class" o "title".
+    pub kind: String,
+    /// "always" o "fullscreen" (solo cuando ocupa toda la pantalla).
+    pub condition: String,
+    /// Perfil que se aplica (id de `Mode`).
+    pub mode: String,
+}
+
+impl Default for AppRule {
+    fn default() -> Self {
+        Self { query: String::new(), kind: "process".into(), condition: "always".into(), mode: Mode::Pause.id().into() }
+    }
+}
+
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", default)]
+pub struct RulesConfig {
+    pub enabled: bool,
+    /// Quitar el filtro mientras un programa ocupa toda la pantalla.
+    pub pause_on_fullscreen: bool,
+    pub items: Vec<AppRule>,
+    #[serde(flatten)]
+    pub extra: Map<String, Value>,
+}
+
+/// Enfoque: franja de lectura que sigue al ratón y velo sobre el resto de ventanas.
+/// (Los nombres «blur*» vienen de la versión 1; es un velo de color, no un desenfoque.)
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", default)]
+pub struct FocusConfig {
+    pub band_enabled: bool,
+    /// Alto de la franja libre, en píxeles lógicos.
+    pub band_height: i32,
+    /// Opacidad (0..100) de lo que queda arriba y abajo.
+    pub band_alpha: i32,
+    /// Color como COLORREF de Windows (0x00BBGGRR); 0 = negro.
+    pub band_color: i32,
+    pub blur_enabled: bool,
+    pub blur_alpha: i32,
+    pub blur_color: i32,
+    pub blur_animate: bool,
+    pub blur_duration_ms: i32,
+    pub include_taskbar: bool,
+    pub current_monitor_only: bool,
+    #[serde(flatten)]
+    pub extra: Map<String, Value>,
+}
+
+impl Default for FocusConfig {
+    fn default() -> Self {
+        Self {
+            band_enabled: false,
+            band_height: 140,
+            band_alpha: 55,
+            band_color: 0,
+            blur_enabled: false,
+            blur_alpha: 60,
+            blur_color: 0,
+            blur_animate: true,
+            blur_duration_ms: 250,
+            include_taskbar: false,
+            current_monitor_only: true,
+            extra: Map::new(),
+        }
+    }
+}
+
+/// Prisma: oscurecer (invertir) o pasar a grises una ventana concreta.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", default)]
+pub struct PrismaConfig {
+    pub enabled: bool,
+    /// Barra con los botones sobre el título de la ventana bajo el ratón.
+    pub show_toolbar: bool,
+    /// Color de la barra (COLORREF).
+    pub color: i32,
+    /// 1 izquierda, 2 derecha, 3 centro.
+    pub place: i32,
+    /// Separación desde el borde (0..100 → 0..200 px).
+    pub offset: i32,
+    /// Espera antes de mostrar la barra (0..100 → 0..1,5 s).
+    pub delay: i32,
+    #[serde(flatten)]
+    pub extra: Map<String, Value>,
+}
+
+impl Default for PrismaConfig {
+    fn default() -> Self {
+        Self { enabled: false, show_toolbar: true, color: 0x003B291E, place: 3, offset: 30, delay: 30, extra: Map::new() }
+    }
+}
+
 /// Configuración completa.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
@@ -228,6 +534,8 @@ pub struct AppConfig {
     pub temperature_disabled: bool,
     pub reapply_interval_seconds: i32,
     pub sync_monitors: bool,
+    /// «Todas las pantallas» pasó a ser lo normal; esto marca que ya se aplicó una vez.
+    pub rs_sync_default: bool,
     pub reset_on_exit: bool,
     pub language: String,
     pub theme_mode: String,
@@ -237,6 +545,11 @@ pub struct AppConfig {
     pub wider_kelvin: bool,
     pub wider_brightness: bool,
     pub schedule: ScheduleConfig,
+    pub rest: RestConfig,
+    pub hotkeys: HotkeyConfig,
+    pub rules: RulesConfig,
+    pub focus: FocusConfig,
+    pub prisma: PrismaConfig,
     pub monitors: BTreeMap<String, MonitorConfig>,
     /// Secciones que esta versión aún no usa; se guardan sin tocarlas.
     #[serde(flatten)]
@@ -253,7 +566,8 @@ impl Default for AppConfig {
             smooth_changes: true,
             temperature_disabled: false,
             reapply_interval_seconds: 0,
-            sync_monitors: false,
+            sync_monitors: true,
+            rs_sync_default: false,
             reset_on_exit: true,
             language: "system".into(),
             theme_mode: "dark".into(),
@@ -263,6 +577,11 @@ impl Default for AppConfig {
             wider_kelvin: false,
             wider_brightness: false,
             schedule: ScheduleConfig::default(),
+            rest: RestConfig::default(),
+            hotkeys: HotkeyConfig::default(),
+            rules: RulesConfig::default(),
+            focus: FocusConfig::default(),
+            prisma: PrismaConfig::default(),
             monitors: BTreeMap::new(),
             extra: Map::new(),
         }
@@ -324,7 +643,8 @@ mod tests {
             "monitors":{"A":{"displayId":"A","mode":"office","future":1}}}"#;
         let cfg: AppConfig = serde_json::from_str(json).unwrap();
         assert_eq!(cfg.language, "es");
-        assert!(cfg.extra.contains_key("rest"));
+        assert!(cfg.rest.enabled);
+        assert_eq!(cfg.rest.work_minutes, 25);
         assert_eq!(cfg.monitors["A"].mode(), Mode::Office);
         let back = serde_json::to_string(&cfg).unwrap();
         assert!(back.contains("\"workMinutes\":25"));

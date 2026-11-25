@@ -1,4 +1,5 @@
-# Compila, atesta y publica el instalador cuando se sube una etiqueta de versión.
+# Compila, atesta y publica los instaladores (Windows, Linux y macOS) cuando se sube
+# una etiqueta de versión.
 # Copiar a .github/workflows/release.yml.
 #
 # La etiqueta es el acto de publicar, a propósito. Así el archivo publicado y el
@@ -96,8 +97,74 @@ jobs:
           if-no-files-found: error
           path: dist/*.exe
 
+  linux:
+    needs: version
+    # 22.04 para que el binario sirva también con glibc más antigua (Mint 21, Debian 12).
+    runs-on: ubuntu-22.04
+    env:
+      VERSION: ${{ needs.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Bibliotecas del sistema
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends libfontconfig1-dev libxkbcommon-dev
+
+      - name: Rust estable y cargo-deb
+        run: |
+          rustup update stable --no-self-update && rustup default stable
+          cargo install cargo-deb --locked --version 3.6.0
+
+      - name: Compilar
+        run: cargo build --release --locked
+
+      - name: Pruebas
+        run: cargo test --release --locked
+
+      - name: Paquete .deb y archivo .tar.gz
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          cargo deb --no-build --locked --output "dist/careoureyes_${VERSION}_amd64.deb"
+          pkg="CareOurEyes-${VERSION}-linux-x86_64"
+          mkdir -p "$pkg"
+          cp target/release/CareOurEyes packaging/linux/careoureyes.desktop LICENSE README.md "$pkg/"
+          cp assets/icon.png "$pkg/careoureyes.png"
+          tar -czf "dist/${pkg}.tar.gz" "$pkg"
+          ls -l dist
+
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: CareOurEyes-Linux
+          if-no-files-found: error
+          path: |
+            dist/*.deb
+            dist/*.tar.gz
+
+  macos:
+    needs: version
+    runs-on: macos-latest
+    env:
+      VERSION: ${{ needs.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Rust estable
+        run: rustup update stable --no-self-update && rustup default stable
+
+      - name: Pruebas
+        run: cargo test --release --locked
+
+      - name: CareOurEyes.app universal y .dmg
+        run: bash packaging/macos/build-app.sh "$VERSION"
+
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: CareOurEyes-macOS
+          if-no-files-found: error
+          path: dist/*.dmg
+
   release:
-    needs: [version, windows]
+    needs: [version, windows, linux, macos]
     runs-on: ubuntu-latest
     steps:
       # gh release create busca el remoto en el checkout.
@@ -112,8 +179,8 @@ jobs:
         run: |
           set -euo pipefail
           cd dist
-          find . -mindepth 2 -type f -name '*.exe' -exec mv -t . {} +
-          sha256sum *.exe > SHA256SUMS
+          find . -mindepth 2 -type f \( -name '*.exe' -o -name '*.deb' -o -name '*.tar.gz' -o -name '*.dmg' \) -exec mv -t . {} +
+          sha256sum *.exe *.deb *.tar.gz *.dmg > SHA256SUMS
           cat SHA256SUMS
 
       # Prueba que cada archivo salió de esta etiqueta y de este workflow.
@@ -121,7 +188,11 @@ jobs:
       - name: Atestación de procedencia
         uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
         with:
-          subject-path: dist/*.exe
+          subject-path: |
+            dist/*.exe
+            dist/*.deb
+            dist/*.tar.gz
+            dist/*.dmg
 
       - name: Publicar
         env:
@@ -137,11 +208,14 @@ jobs:
             echo
             echo "- \`*-setup.exe\`: instalador para tu usuario (no pide permisos de administrador)."
             echo "- \`*-portable.exe\`: el programa solo, sin instalar."
+            echo "- \`*.deb\`: Linux (Mint, Ubuntu, Debian). Brillo y color necesitan una sesión X11."
+            echo "- \`*-linux-x86_64.tar.gz\`: Linux, el programa solo."
+            echo "- \`*-macos.dmg\`: macOS 11 o posterior (Apple Silicon e Intel). Sin firmar: la primera vez, clic derecho → Abrir."
             echo
             echo "### Verificar la descarga"
             echo
             echo '```sh'
-            for f in *.exe; do
+            for f in *.exe *.deb *.tar.gz *.dmg; do
               echo "gh attestation verify ${f} -R ${GITHUB_REPOSITORY}"
             done
             echo '```'
@@ -157,7 +231,7 @@ jobs:
             flags+=(--prerelease)
           fi
           gh release create "$GITHUB_REF_NAME" \
-            *.exe SHA256SUMS \
+            *.exe *.deb *.tar.gz *.dmg SHA256SUMS \
             --title "CareOurEyes ${GITHUB_REF_NAME}" \
             --notes-file "$RUNNER_TEMP/notes.md" \
             "${flags[@]}"

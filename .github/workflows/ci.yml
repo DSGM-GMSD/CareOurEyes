@@ -1,4 +1,4 @@
-# Compila y prueba en Windows cada push y cada pull request.
+# Compila y prueba en Windows, Linux y macOS cada push y cada pull request.
 # Copiar a .github/workflows/ci.yml.
 name: CI
 
@@ -17,6 +17,43 @@ concurrency:
 jobs:
   windows:
     runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Rust estable
+        run: rustup update stable --no-self-update && rustup default stable
+
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+
+      - name: Compilar
+        run: cargo build --release --locked
+
+      - name: Pruebas
+        run: cargo test --release --locked
+
+  linux:
+    # 22.04: el binario funciona también en distribuciones con glibc más antigua
+    # (Linux Mint 21, Ubuntu 22.04, Debian 12).
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Bibliotecas del sistema
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends libfontconfig1-dev libxkbcommon-dev
+
+      - name: Rust estable
+        run: rustup update stable --no-self-update && rustup default stable
+
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+
+      - name: Compilar
+        run: cargo build --release --locked
+
+      - name: Pruebas
+        run: cargo test --release --locked
+
+  macos:
+    runs-on: macos-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 

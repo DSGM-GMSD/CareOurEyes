@@ -15,8 +15,11 @@ import { Icon, EyeMark } from "widgets.slint";
 import { ScreenPage } from "screen.slint";
 import { OptionsPage, AboutPage, PendingPage } from "pages.slint";
 import { ScheduleDialog, ResetDialog } from "dialog.slint";
+import { Rest, RestPage, BreakToast, BreakOverlay } from "rest.slint";
+import { Keys, HotkeyRow } from "keys.slint";
+import { Focus, FocusPage, PrismaPage, PrismaBar } from "focus.slint";
 
-export { Theme, T, App, MonitorItem }
+export { Theme, T, App, MonitorItem, Rest, BreakToast, BreakOverlay, Keys, HotkeyRow, Focus, PrismaBar }
 
 // ---------------------------------------------------------------- barra de título
 
@@ -54,7 +57,17 @@ component CaptionButton inherits Rectangle {
 component TitleBar inherits Rectangle {
     height: Theme.title-bar + 1px;
     background: Theme.o950;
-    // Windows arrastra la ventana desde esta franja (ver enable_title_drag).
+    // Windows arrastra la ventana desde esta franja (ver enable_title_drag);
+    // en Linux la arrastra el gestor de ventanas al pulsar aquí.
+    TouchArea {
+        height: Theme.title-bar;
+        y: 0;
+        pointer-event(e) => {
+            if e.kind == PointerEventKind.down && e.button == PointerEventButton.left {
+                App.start-drag();
+            }
+        }
+    }
     HorizontalLayout {
         height: Theme.title-bar;
         y: 0;
@@ -203,7 +216,7 @@ component ComfortCard inherits Rectangle {
                 color: Theme.s500;
             }
             Text {
-                text: "--:--";
+                text: Rest.enabled && !Rest.paused ? Rest.countdown : "--:--";
                 font-size: 10px;
                 font-family: Theme.mono;
                 color: Theme.s300;
@@ -296,6 +309,7 @@ component Sidebar inherits Rectangle {
 
 export component AppWindow inherits Window {
     title: "CareOurEyes";
+    icon: @image-url("../assets/icon.png");
     no-frame: true;
     width: 980px;
     height: 700px;
@@ -330,21 +344,9 @@ export component AppWindow inherits Window {
                     height: self.preferred-height;
                     spacing: Theme.gap;
                     if App.page == 0: ScreenPage { }
-                    if App.page == 1: PendingPage {
-                        icon: Icons.timer;
-                        title: T.tr("nav_pausa");
-                        subtitle: T.tr("recordatorio_de_pausa");
-                    }
-                    if App.page == 2: PendingPage {
-                        icon: Icons.filter-center-focus;
-                        title: T.tr("enfoque");
-                        subtitle: T.tr("una_franja_clara_para_leer_o_un_velo_sobre_t");
-                    }
-                    if App.page == 3: PendingPage {
-                        icon: Icons.visibility;
-                        title: T.tr("prisma");
-                        subtitle: T.tr("oscurece_o_pone_en_gris_otra_ventana_posa_el");
-                    }
+                    if App.page == 1: RestPage { }
+                    if App.page == 2: FocusPage { }
+                    if App.page == 3: PrismaPage { }
                     if App.page == 4: OptionsPage { }
                     if App.page == 5: AboutPage { }
                 }

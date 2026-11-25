@@ -1,0 +1,13 @@
+[Desktop Entry]
+Type=Application
+Name=CareOurEyes
+GenericName=Eye care
+GenericName[es]=Cuidado de la vista
+Comment=Brightness, color temperature and break reminders
+Comment[es]=Brillo, temperatura de color y recordatorios de pausa
+Exec=CareOurEyes
+Icon=careoureyes
+Terminal=false
+Categories=Utility;Accessibility;
+Keywords=night;blue light;brightness;gamma;eyes;break;
+StartupNotify=false
