@@ -504,7 +504,7 @@ dependencies = [
 
 [[package]]
 name = "careoureyes"
-version = "2.0.0-alpha.2"
+version = "2.0.0-beta.1"
 dependencies = [
  "chrono",
  "embed-resource",
@@ -522,6 +522,8 @@ dependencies = [
  "sys-locale",
  "tray-icon",
  "ureq",
+ "wayland-client",
+ "wayland-protocols-wlr",
  "windows 0.58.0",
  "x11rb",
 ]

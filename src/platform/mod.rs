@@ -73,6 +73,10 @@ pub trait Backend {
     /// Deja la pantalla como estaba al abrir la app.
     fn restore(&mut self, id: &str);
     fn restore_all(&mut self);
+    /// ¿Puede bajar el brillo? (la luz nocturna de GNOME/KDE solo cambia el color)
+    fn supports_brightness(&self) -> bool {
+        true
+    }
 }
 
 pub fn backend() -> Box<dyn Backend> {
@@ -82,10 +86,19 @@ pub fn backend() -> Box<dyn Backend> {
     }
     #[cfg(target_os = "linux")]
     {
-        if std::env::var_os("COE_SIM").is_none() && linux::x::x().is_some() {
-            return Box::new(linux::gamma::RandrGamma::new());
+        if std::env::var_os("COE_SIM").is_some() {
+            return Box::new(dummy::Simulated::default());
         }
-        Box::new(dummy::Simulated::default())
+        if linux::wayland::session_is_wayland() {
+            if let Some(b) = linux::wayland::WlrGamma::new() {
+                return Box::new(b);
+            }
+            if let Some(b) = linux::nightlight::NightLight::detect() {
+                return Box::new(b);
+            }
+        }
+        // X11 (sin servidor X, este motor no encuentra pantallas).
+        Box::new(linux::gamma::RandrGamma::new())
     }
     #[cfg(target_os = "macos")]
     {
@@ -309,5 +322,40 @@ pub fn single_instance() -> bool {
     }
 }
 
-/// ¿Se pueden usar Enfoque y Prisma? (por ahora solo en Windows).
-pub const HAS_FX: bool = cfg!(windows);
+/// Prisma (oscurecer o poner en gris otra ventana) solo existe en Windows: usa la
+/// lupa del sistema, que Linux y macOS no tienen.
+pub const HAS_PRISMA: bool = cfg!(windows);
+
+/// Atajos globales y datos de la ventana activa (para las reglas por programa).
+/// En Linux solo con X11: Wayland no deja leer el teclado ni la ventana activa.
+pub fn has_desktop_access() -> bool {
+    #[cfg(target_os = "linux")]
+    {
+        linux::x::x().is_some()
+    }
+    #[cfg(not(target_os = "linux"))]
+    {
+        cfg!(any(windows, target_os = "macos"))
+    }
+}
+
+/// Franja y velo de Enfoque. En Linux hacen falta X11 y un compositor.
+pub fn has_focus() -> bool {
+    #[cfg(target_os = "linux")]
+    {
+        static OK: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+        *OK.get_or_init(linux::fx::available)
+    }
+    #[cfg(not(target_os = "linux"))]
+    {
+        cfg!(any(windows, target_os = "macos"))
+    }
+}
+
+/// Franja y velo de cada sistema (mismas funciones en todos).
+#[cfg(windows)]
+pub use windows::fx;
+#[cfg(target_os = "linux")]
+pub use linux::fx;
+#[cfg(target_os = "macos")]
+pub use macos::fx;

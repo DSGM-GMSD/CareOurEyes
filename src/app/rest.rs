@@ -46,6 +46,7 @@ fn style_index(c: &RestConfig) -> i32 {
 pub(super) fn init(app: &crate::ui::AppWindow) -> Result<(), slint::PlatformError> {
     let toast = BreakToast::new()?;
     wire_translations(toast.global::<T>());
+    toast.set_rounded(!cfg!(windows));
     toast.on_take_break(take_break);
     toast.on_delay(postpone);
     toast.on_skip(skip);

@@ -2,7 +2,7 @@
 
 import { Theme, T } from "theme.slint";
 import { Icons } from "icons.slint";
-import { Icon, CareButton, CareChip, ToggleRow, SectionCard, Stepper, TextMenu } from "widgets.slint";
+import { Icon, CareButton, CareChip, ToggleRow, SectionCard, Stepper, TextMenu, InfoCard } from "widgets.slint";
 
 export struct HotkeyRow {
     // Nombre del campo en config.json (incBrightness, read…).
@@ -23,6 +23,9 @@ export global Keys {
     in-out property <string> capturing: "";
     // Lo que se lleva pulsado mientras se graba (p. ej. "Ctrl+Alt+…").
     in property <string> capture-preview: "";
+    // En Wayland (por ahora) no hay atajos globales ni se ve la ventana activa.
+    in property <bool> hotkeys-available: true;
+    in property <bool> rules-available: true;
     callback set-step(string, int);
     callback start-capture(string);
     // nombre, texto de la tecla, Ctrl, Alt, Mayús, Win → true si ya quedó grabado.
@@ -138,7 +141,11 @@ export component HotkeyField inherits Rectangle {
 
 export component KeysOptions inherits VerticalLayout {
     spacing: 8px;
-    SectionCard {
+    if !Keys.hotkeys-available: InfoCard {
+        title: T.tr("rs_wayland_atajos");
+        body: T.tr("rs_wayland_atajos_texto");
+    }
+    if Keys.hotkeys-available: SectionCard {
         title: T.tr("atajos");
         subtitle: T.tr("rs_atajos_texto");
         Stepper {
@@ -167,7 +174,11 @@ export component KeysOptions inherits VerticalLayout {
 export component RulesOptions inherits VerticalLayout {
     spacing: 8px;
     property <[string]> kinds: [T.tr("proceso"), T.tr("clase"), T.tr("titulo")];
-    SectionCard {
+    if !Keys.rules-available: InfoCard {
+        title: T.tr("rs_wayland_reglas");
+        body: T.tr("rs_wayland_reglas_texto");
+    }
+    if Keys.rules-available: SectionCard {
         title: T.tr("reglas");
         subtitle: T.tr("si_la_ventana_activa_coincide_se_cambia_el_p");
         ToggleRow {
@@ -183,7 +194,7 @@ export component RulesOptions inherits VerticalLayout {
             toggled(on) => { Keys.set-rules-bool("enabled", on); }
         }
     }
-    if Keys.rules-enabled: SectionCard {
+    if Keys.rules-available && Keys.rules-enabled: SectionCard {
         title: T.tr("rs_mis_reglas");
         subtitle: Keys.rules.length == 0 ? T.tr("rs_sin_reglas") : "";
         for rule[i] in Keys.rules: Rectangle {
@@ -212,7 +223,7 @@ export component RulesOptions inherits VerticalLayout {
             }
         }
     }
-    if Keys.rules-enabled: SectionCard {
+    if Keys.rules-available && Keys.rules-enabled: SectionCard {
         title: T.tr("rs_regla_nueva");
         subtitle: T.tr("rs_regla_nueva_texto");
         HorizontalLayout {

@@ -359,7 +359,7 @@ fn apply_theme(dark: bool, accent: i32) {
 }
 
 fn accent_index(id: &str) -> i32 {
-    ACCENTS.iter().position(|a| a.eq_ignore_ascii_case(id)).unwrap_or(0) as i32
+    ACCENTS.iter().position(|a| a.eq_ignore_ascii_case(id)).unwrap_or(1) as i32
 }
 
 /// Solo el confort visual (cambia en cada paso de la animación).
@@ -425,7 +425,7 @@ fn push() {
 
         // Opciones
         let c = &s.cfg;
-        g.set_theme_mode(THEMES.iter().position(|t| *t == c.theme_mode).unwrap_or(0) as i32);
+        g.set_theme_mode(THEMES.iter().position(|t| *t == c.theme_mode).unwrap_or(2) as i32);
         let lang = i18n::LANGUAGES.iter().position(|l| l.0 == c.language).unwrap_or(0);
         g.set_language(lang as i32);
         g.set_language_restart(i18n::resolve(&c.language) != i18n::current());
@@ -439,6 +439,7 @@ fn push() {
         g.set_wider_kelvin(c.wider_kelvin);
         g.set_wider_brightness(c.wider_brightness);
         // Con una sola pantalla no hay «todas»: se muestra esa.
+        g.set_brightness_supported(s.backend.supports_brightness());
         g.set_sync_monitors(c.sync_monitors && s.displays.len() > 1);
         g.set_close_to_tray(c.close_to_tray);
         g.set_start_in_tray(c.start_in_tray);
@@ -852,6 +853,7 @@ pub fn run(start_hidden: bool) -> Result<(), slint::PlatformError> {
 
     let g = app.global::<App>();
     g.set_version(env!("CARGO_PKG_VERSION").into());
+    g.set_rounded_window(!cfg!(windows) && std::env::var_os("COE_SQUARE").is_none());
     let names: Vec<SharedString> = i18n::LANGUAGES.iter().map(|l| SharedString::from(l.1)).collect();
     g.set_language_names(ModelRc::new(VecModel::from(names)));
     push_monitors();
@@ -1283,7 +1285,7 @@ fn connect_options(app: &AppWindow) {
     let g = app.global::<App>();
     g.on_set_theme_mode(|i| {
         let (dark, accent) = with(|s| {
-            s.cfg.theme_mode = THEMES.get(i as usize).unwrap_or(&"dark").to_string();
+            s.cfg.theme_mode = THEMES.get(i as usize).unwrap_or(&"system").to_string();
             s.dirty = true;
             (s.dark(), accent_index(&s.cfg.accent_theme))
         });
@@ -1292,7 +1294,7 @@ fn connect_options(app: &AppWindow) {
     });
     g.on_set_accent(|i| {
         let dark = with(|s| {
-            s.cfg.accent_theme = ACCENTS.get(i as usize).unwrap_or(&"emerald").to_string();
+            s.cfg.accent_theme = ACCENTS.get(i as usize).unwrap_or(&"cyan").to_string();
             s.dirty = true;
             s.dark()
         });

@@ -39,6 +39,11 @@ fn atom(conn: &RustConnection, name: &str) -> Atom {
 pub fn x() -> Option<Arc<X>> {
     XCONN
         .get_or_init(|| {
+            // En una sesión Wayland, XWayland solo ve las apps de X11: sus datos
+            // (ventana activa, inactividad, atajos, gamma) no servirían.
+            if super::wayland::session_is_wayland() {
+                return None;
+            }
             let (conn, screen) = x11rb::connect(None).ok()?;
             let root = conn.setup().roots.get(screen)?.root;
             let x = Arc::new(X {
@@ -63,10 +68,6 @@ pub fn x() -> Option<Arc<X>> {
         .clone()
 }
 
-/// ¿La sesión es Wayland sin X? (entonces no hay gamma ni atajos globales).
-pub fn wayland_only() -> bool {
-    std::env::var_os("WAYLAND_DISPLAY").is_some() && std::env::var_os("DISPLAY").is_none()
-}
 
 fn events(x: Arc<X>) {
     let ignored = u16::from(ModMask::LOCK | ModMask::M2);

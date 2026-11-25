@@ -1,11 +1,14 @@
-//! Linux (X11): gamma por RandR, bandeja StatusNotifierItem, atajos globales,
-//! inactividad y ventana activa. En Wayland puro no hay gamma (se usa el simulador
-//! con el motor marcado como no disponible).
+//! Linux: gamma por RandR en X11 (o wlr-gamma-control / luz nocturna en
+//! Wayland), bandeja StatusNotifierItem, atajos globales, inactividad y
+//! ventana activa (estas tres, solo en X11).
 
 pub mod desk;
+pub mod fx;
 pub mod gamma;
+pub mod nightlight;
 pub mod shell;
 pub mod tray;
+pub mod wayland;
 pub mod x;
 
 use crate::platform::TrayEvent;

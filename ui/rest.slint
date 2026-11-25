@@ -376,18 +376,21 @@ export component BreakToast inherits Window {
     callback delay();
     callback skip();
     callback dismiss();
+    // Fuera de Windows las esquinas redondeadas las dibuja la app.
+    in property <bool> rounded: false;
 
     title: "CareOurEyes";
     no-frame: true;
     always-on-top: true;
     width: 400px;
-    background: Theme.o800;
+    background: root.rounded ? transparent : Theme.o800;
     default-font-family: "Inter";
 
     Rectangle {
         border-width: 1px;
         border-color: Theme.border-soft;
-        border-radius: 8px;
+        border-radius: root.rounded ? 10px : 8px;
+        background: root.rounded ? Theme.o800 : transparent;
     }
     VerticalLayout {
         padding: 14px;

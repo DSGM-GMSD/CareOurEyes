@@ -313,59 +313,69 @@ export component AppWindow inherits Window {
     no-frame: true;
     width: 980px;
     height: 700px;
-    background: Theme.o900;
+    // Fuera de Windows (que redondea las esquinas por su cuenta) la ventana es
+    // transparente y el marco redondeado lo dibuja la propia app.
+    background: App.rounded-window ? transparent : Theme.o900;
     default-font-family: "Inter";
     default-font-size: 13px;
 
-    // Solo en diagnóstico: detrás de todo, anota los eventos del ratón que no
-    // atrapa ningún otro elemento.
-    if App.debug: TouchArea {
-        pointer-event(ev) => {
-            App.debug-pointer(ev.kind == PointerEventKind.move ? "move" : ev.kind == PointerEventKind.down ? "down" : ev.kind == PointerEventKind.up ? "up" : "cancel", self.mouse-x, self.mouse-y);
-        }
-    }
+    frame := Rectangle {
+        border-radius: App.rounded-window ? 10px : 0px;
+        border-width: App.rounded-window ? 1px : 0px;
+        border-color: Theme.border-mid;
+        background: Theme.o900;
+        clip: true;
 
-    VerticalLayout {
-        TitleBar { }
-        HorizontalLayout {
-            vertical-stretch: 1;
-            Sidebar { }
-            Rectangle {
-                width: 1px;
-                background: Theme.border-soft;
+        // Solo en diagnóstico: detrás de todo, anota los eventos del ratón que no
+        // atrapa ningún otro elemento.
+        if App.debug: TouchArea {
+            pointer-event(ev) => {
+                App.debug-pointer(ev.kind == PointerEventKind.move ? "move" : ev.kind == PointerEventKind.down ? "down" : ev.kind == PointerEventKind.up ? "up" : "cancel", self.mouse-x, self.mouse-y);
             }
-            content := Flickable {
-                horizontal-stretch: 1;
-                content-height: max(self.height, page.preferred-height + 2 * Theme.page-pad);
-                page := VerticalLayout {
-                    x: Theme.page-pad;
-                    y: Theme.page-pad;
-                    width: content.width - 2 * Theme.page-pad;
-                    height: self.preferred-height;
-                    spacing: Theme.gap;
-                    if App.page == 0: ScreenPage { }
-                    if App.page == 1: RestPage { }
-                    if App.page == 2: FocusPage { }
-                    if App.page == 3: PrismaPage { }
-                    if App.page == 4: OptionsPage { }
-                    if App.page == 5: AboutPage { }
+        }
+
+        VerticalLayout {
+            TitleBar { }
+            HorizontalLayout {
+                vertical-stretch: 1;
+                Sidebar { }
+                Rectangle {
+                    width: 1px;
+                    background: Theme.border-soft;
+                }
+                content := Flickable {
+                    horizontal-stretch: 1;
+                    content-height: max(self.height, page.preferred-height + 2 * Theme.page-pad);
+                    page := VerticalLayout {
+                        x: Theme.page-pad;
+                        y: Theme.page-pad;
+                        width: content.width - 2 * Theme.page-pad;
+                        height: self.preferred-height;
+                        spacing: Theme.gap;
+                        if App.page == 0: ScreenPage { }
+                        if App.page == 1: RestPage { }
+                        if App.page == 2: FocusPage { }
+                        if App.page == 3: PrismaPage { }
+                        if App.page == 4: OptionsPage { }
+                        if App.page == 5: AboutPage { }
+                    }
                 }
             }
         }
-    }
 
-    if App.confirm-reset: ResetDialog {
-        x: 0;
-        y: 0;
-        width: root.width;
-        height: root.height;
-    }
+        if App.confirm-reset: ResetDialog {
+            x: 0;
+            y: 0;
+            width: root.width;
+            height: root.height;
+        }
 
-    if App.dialog-open: ScheduleDialog {
-        x: 0;
-        y: 0;
-        width: root.width;
-        height: root.height;
+        if App.dialog-open: ScheduleDialog {
+            x: 0;
+            y: 0;
+            width: root.width;
+            height: root.height;
+        }
     }
 }
 

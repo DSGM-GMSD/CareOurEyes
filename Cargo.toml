@@ -1,6 +1,6 @@
 [package]
 name = "careoureyes"
-version = "2.0.0-alpha.2"
+version = "2.0.0-beta.1"
 edition = "2021"
 description = "CareOurEyes: software brightness, color temperature and eye-care profiles"
 license = "GPL-3.0-only"
@@ -73,10 +73,13 @@ windows = { version = "0.58", features = [
 
 [target.'cfg(target_os = "linux")'.dependencies]
 # X11: gamma por RandR, atajos globales, inactividad y ventana activa.
-x11rb = { version = "0.13", features = ["randr", "screensaver"] }
+x11rb = { version = "0.13", features = ["randr", "screensaver", "shape"] }
 # Icono de bandeja (StatusNotifierItem), sin tokio.
 ksni = { version = "0.3", default-features = false, features = ["async-io", "blocking"] }
 png = "0.18"
+# Wayland: gamma por wlr-gamma-control (Sway, Hyprland, river, Wayfire, labwc…).
+wayland-client = "0.31"
+wayland-protocols-wlr = { version = "0.3", features = ["client"] }
 
 [target.'cfg(target_os = "macos")'.dependencies]
 # Icono en la barra de menús y atajos globales (los de Tauri, mantenidos).

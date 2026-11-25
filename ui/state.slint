@@ -115,6 +115,10 @@ export global App {
     // --- Ventana
     // Diagnóstico (COE_DEBUG): eventos del ratón que llegan a la ventana.
     in property <bool> debug: false;
+    // La app dibuja sus esquinas redondeadas (Linux y macOS).
+    in property <bool> rounded-window: false;
+    // La luz nocturna de GNOME/KDE (Wayland) solo cambia el color, no el brillo.
+    in property <bool> brightness-supported: true;
     callback debug-pointer(string, length, length);
 
     callback minimize();

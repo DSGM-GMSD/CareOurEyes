@@ -118,13 +118,17 @@ pub(super) fn stop() {
         }
     });
     hide_bar();
+    #[cfg(any(windows, target_os = "linux", target_os = "macos"))]
+    if crate::platform::has_focus() {
+        use crate::platform::fx;
+        fx::band(None);
+        fx::veil(None);
+        fx::destroy_veils();
+    }
     #[cfg(windows)]
     {
         use crate::platform::windows::fx;
-        fx::band(None);
-        fx::veil(None);
         fx::prisma_clear();
-        fx::destroy_veils();
         fx::prisma_shutdown();
     }
 }
@@ -140,7 +144,9 @@ pub(super) fn shutdown() {
 fn needed() -> bool {
     let (band, veil, prisma) =
         with(|s| (s.cfg.focus.band_enabled, s.cfg.focus.blur_enabled, s.cfg.prisma.enabled));
-    band || veil || prisma || prisma_target().0 != 0
+    let focus = (band || veil) && crate::platform::has_focus();
+    let prisma = crate::platform::HAS_PRISMA && (prisma || prisma_target().0 != 0);
+    focus || prisma
 }
 
 fn sync() {
@@ -163,10 +169,15 @@ fn sync() {
 
 fn tick() {
     let (fc, pc) = with(|s| (s.cfg.focus.clone(), s.cfg.prisma.clone()));
-    #[cfg(windows)]
-    {
-        use crate::platform::windows::fx;
-        let scale = ui().map(|a| a.window().scale_factor()).unwrap_or(1.0);
+    #[cfg(any(windows, target_os = "linux", target_os = "macos"))]
+    if crate::platform::has_focus() {
+        use crate::platform::fx;
+        #[cfg(target_os = "linux")]
+        if let Some(id) = ui().and_then(|a| crate::platform::linux::desk::xid(a.window())) {
+            fx::set_main_window(id);
+        }
+        // Windows y X11 trabajan en píxeles físicos; macOS, en puntos.
+        let scale = if cfg!(target_os = "macos") { 1.0 } else { ui().map(|a| a.window().scale_factor()).unwrap_or(1.0) };
         let alpha = |pct: i32| (pct.clamp(0, 100) as f32 * 2.55) as u8;
         fx::band(fc.band_enabled.then(|| fx::Band {
             height: (fc.band_height.clamp(40, 800) as f32 * scale) as i32,
@@ -185,13 +196,20 @@ fn tick() {
             taskbar: fc.include_taskbar,
             current_monitor_only: fc.current_monitor_only,
         }));
+    }
+    #[cfg(windows)]
+    {
+        use crate::platform::windows::fx;
+        let scale = ui().map(|a| a.window().scale_factor()).unwrap_or(1.0);
         fx::prisma_follow();
         if pc.enabled && pc.show_toolbar {
             toolbar(&pc, scale);
         }
     }
+    #[cfg(not(any(windows, target_os = "linux", target_os = "macos")))]
+    let _ = &fc;
     #[cfg(not(windows))]
-    let _ = (fc, pc);
+    let _ = &pc;
 }
 
 // ------------------------------------------------------------------ Prisma
@@ -387,7 +405,8 @@ fn rows_changed(current: ModelRc<HotkeyRow>, rows: &[HotkeyRow]) -> bool {
 pub(super) fn push() {
     let Some(app) = ui() else { return };
     let f = app.global::<Focus>();
-    f.set_available(crate::platform::HAS_FX);
+    f.set_available(crate::platform::has_focus());
+    f.set_prisma_available(crate::platform::HAS_PRISMA);
     let (fc, pc, hk) = with(|s| (s.cfg.focus.clone(), s.cfg.prisma.clone(), s.cfg.hotkeys.clone()));
     f.set_band(fc.band_enabled);
     f.set_band_height(fc.band_height);

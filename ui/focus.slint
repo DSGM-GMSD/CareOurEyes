@@ -9,6 +9,8 @@ import { HotkeyField, HotkeyRow } from "keys.slint";
 export global Focus {
     // Enfoque y Prisma existen en este sistema (por ahora, solo Windows).
     in property <bool> available: true;
+    // Prisma solo existe en Windows.
+    in property <bool> prisma-available: true;
     // Colores que se pueden elegir (los mismos para todo) y el elegido de cada cosa.
     in property <[color]> swatches: [#000000, #1E293B, #1E3A5F, #3B1F5E, #4A2C0A, #0F3D2E];
     in property <int> band-color: 0;
@@ -114,8 +116,8 @@ export component FocusPage inherits VerticalLayout {
         subtitle: T.tr("una_franja_clara_para_leer_o_un_velo_sobre_t");
     }
     if !Focus.available: InfoCard {
-        title: T.tr("rs_solo_windows");
-        body: T.tr("rs_solo_windows_texto");
+        title: T.tr("rs_enfoque_no_disponible");
+        body: T.tr("rs_enfoque_no_disponible_texto");
     }
     if Focus.available: VerticalLayout {
         spacing: 8px;
@@ -216,11 +218,11 @@ export component PrismaPage inherits VerticalLayout {
         title: T.tr("prisma");
         subtitle: T.tr("oscurece_o_pone_en_gris_otra_ventana_posa_el");
     }
-    if !Focus.available: InfoCard {
+    if !Focus.prisma-available: InfoCard {
         title: T.tr("rs_solo_windows");
-        body: T.tr("rs_solo_windows_texto");
+        body: T.tr("rs_prisma_solo_windows_texto");
     }
-    if Focus.available: VerticalLayout {
+    if Focus.prisma-available: VerticalLayout {
         spacing: 8px;
     if Focus.prisma-status != "": Rectangle {
         border-radius: 12px;

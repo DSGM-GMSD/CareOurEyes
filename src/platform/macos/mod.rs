@@ -3,6 +3,7 @@
 
 pub mod cg;
 pub mod desk;
+pub mod fx;
 pub mod gamma;
 pub mod keys;
 pub mod shell;

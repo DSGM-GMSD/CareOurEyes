@@ -10,7 +10,7 @@ color temperature, per-monitor day/night profiles. GPL-3.0.*
 
 ![Interfaz de CareOurEyes](docs/captura-ui.png)
 
-> **Versión 2 en desarrollo (alfa).** CareOurEyes se reescribió en **Rust + [Slint](https://slint.dev)**.
+> **Versión 2 en beta.** CareOurEyes se reescribió en **Rust + [Slint](https://slint.dev)**.
 > Funciona en **Windows** y en **Linux con X11** (p. ej. Linux Mint Cinnamon). La versión
 > para **macOS** es experimental: compila, pero todavía nadie la ha probado en un Mac
 > ([ver el estado](#estado)).
@@ -30,9 +30,14 @@ Ve a **[Releases](https://github.com/DSGM-GMSD/CareOurEyes/releases)** y baja:
 **Windows** 10/11 de 64 bits. SmartScreen puede avisar porque el archivo no está
 firmado: «Más información» → «Ejecutar de todas formas».
 
-**Linux**: el brillo y el color necesitan una sesión **X11** (la normal en Linux Mint).
-En Wayland puro el sistema no deja cambiar la gamma desde otra app; ahí usa la luz
-nocturna del escritorio. El icono de la bandeja usa StatusNotifierItem (Cinnamon,
+**Linux**: en una sesión **X11** (la normal en Linux Mint) funciona todo. En **Wayland**:
+
+- Sway, Hyprland, river, Wayfire, labwc y otros compositores con `wlr-gamma-control`:
+  brillo y color completos.
+- GNOME y KDE Plasma no dejan cambiar la gamma desde otra app: CareOurEyes maneja su
+  luz nocturna, que solo cambia el color (el brillo no). Al salir la deja como estaba.
+- En Wayland no hay atajos globales, reglas por programa, Enfoque ni detección de
+  inactividad: el sistema no lo permite a las apps. El icono de la bandeja usa StatusNotifierItem (Cinnamon,
 KDE, XFCE, MATE; en GNOME, con la extensión AppIndicator).
 
 **macOS**: la app no está firmada por Apple. La primera vez, ábrela y luego ve a
@@ -46,7 +51,7 @@ GitHub, que prueba que el archivo se compiló desde esa etiqueta con el workflow
 `release.yml` de este repositorio. Con [GitHub CLI](https://cli.github.com/):
 
 ```bash
-gh attestation verify CareOurEyes-2.0.0-alpha.1-setup.exe -R DSGM-GMSD/CareOurEyes
+gh attestation verify CareOurEyes-2.0.0-beta.1-setup.exe -R DSGM-GMSD/CareOurEyes
 ```
 
 ---
@@ -89,22 +94,27 @@ suaves** en lugar de saltos. Al cerrar, devuelve la pantalla a como la encontró
   tu equipo (`error.log`).
 - **Idiomas**: español, English, 简体中文, 繁體中文, Deutsch, Nederlands, Italiano,
   Türkçe, Français y 日本語. Sigue el idioma del sistema o se elige en Opciones.
-- Tema oscuro, claro o el del sistema, con 7 colores de acento.
+- Tema oscuro, claro o el del sistema (el predeterminado), con 7 colores de acento.
 - **Configuración en JSON** legible, compatible con la versión 1.
 
 ### Estado
 
 | Función | Windows | Linux | macOS |
 |---------|:-------:|:-----:|:-----:|
-| Brillo, temperatura, perfiles y Auto Día/Noche | ✅ | ✅ (X11) | 🧪 |
+| Brillo, temperatura, perfiles y Auto Día/Noche | ✅ | ✅ X11 y Wayland ³ | 🧪 |
 | Bandeja y arrancar al iniciar sesión | ✅ | ✅ | 🧪 |
 | Descansos (20-20-20, Pomodoro) | ✅ | ✅ | 🧪 |
 | Atajos de teclado y reglas por app | ✅ | ✅ (X11) | 🧪 ¹ |
-| Enfoque y Prisma | ✅ | — | — |
+| Enfoque (franja de lectura y velo) | ✅ | ✅ (X11 con compositor) | 🧪 |
+| Prisma (una ventana oscura o en gris) | ✅ | — ² | — ² |
 
 🧪 = escrito, sin probar todavía en un equipo real. — = no disponible por ahora.
 ¹ En macOS las reglas reconocen la app activa por su nombre o identificador, pero no
-el título de la ventana ni si está a pantalla completa. Los ajustes de secciones que un sistema
+el título de la ventana ni si está a pantalla completa.
+² Prisma usa la lupa de Windows (Magnification API); Linux y macOS no tienen nada
+equivalente.
+³ En Wayland, completo con `wlr-gamma-control` (Sway, Hyprland…); en GNOME y KDE Plasma
+solo el color, con su luz nocturna. Los ajustes de secciones que un sistema
 no usa se conservan intactos en `config.json`.
 
 ---
@@ -137,7 +147,7 @@ CareOurEyes lo evita así:
 
 En Windows usa `CreateDC("DISPLAY", "\\.\DISPLAYn")` y `SetDeviceGammaRamp` (gdi32).
 En Linux usa la rampa de cada CRTC con RandR (`SetCrtcGamma`), que funciona con
-cualquier tamaño de tabla. En macOS, `CGSetDisplayTransferByTable` de CoreGraphics; al
+cualquier tamaño de tabla; en Wayland, el protocolo `wlr-gamma-control`. En macOS, `CGSetDisplayTransferByTable` de CoreGraphics; al
 salir se recargan los perfiles de ColorSync.
 Windows limita cuánto puede oscurecer una rampa; si la función pública la rechaza,
 la app usa la variante de `mscms.dll`, salvo que actives
@@ -173,8 +183,8 @@ Linux y macOS (útil para trabajar en la interfaz). Para el paquete `.deb`:
 | `src/i18n.rs`, `i18n/` | Traducciones |
 | `src/app.rs` | Estado de la app y conexión con la interfaz |
 | `src/platform/windows/` | Rampa gamma GDI, bandeja, autoarranque, Enfoque y Prisma |
-| `src/platform/linux/` | Gamma RandR, bandeja (StatusNotifierItem), atajos X11 |
-| `src/platform/macos/` | Gamma CoreGraphics, barra de menús, atajos (Carbon) |
+| `src/platform/linux/` | Gamma RandR y Wayland, luz nocturna GNOME/KDE, bandeja, atajos X11, Enfoque |
+| `src/platform/macos/` | Gamma CoreGraphics, barra de menús, atajos (Carbon), Enfoque |
 | `ui/` | Interfaz Slint |
 | `packaging/` | Instalador (Inno Setup), `.desktop` de Linux, app de macOS y workflows |
 
@@ -190,11 +200,11 @@ cuando se sube una etiqueta `v*`: comprueba que coincide con la versión de
 3. Crea la etiqueta anotada sobre ese commit y súbela:
 
    ```bash
-   git tag -a v2.0.0-alpha.2 -m "CareOurEyes v2.0.0-alpha.2"
-   git push origin v2.0.0-alpha.2
+   git tag -a v2.0.0-beta.2 -m "CareOurEyes v2.0.0-beta.2"
+   git push origin v2.0.0-beta.2
    ```
 
-Una versión con guion (`-alpha.2`, `-rc1`) se publica como pre-release.
+Una versión con guion (`-beta.2`, `-rc.1`) se publica como pre-release.
 
 Configuración del usuario: `%APPDATA%\CareOurEyes\config.json`.
 

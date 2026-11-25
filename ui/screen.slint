@@ -635,7 +635,11 @@ export component ScreenPage inherits VerticalLayout {
             pad: 16px;
             gap: 12px;
             border-color: App.previewing ? (App.editing-night ? Theme.amber300 : Theme.e450).with-alpha(0.55) : Theme.border-soft;
-            SliderPanel {
+            if !App.brightness-supported: InfoCard {
+                title: T.tr("rs_brillo_no_disponible");
+                body: T.tr("rs_brillo_no_disponible_texto");
+            }
+            if App.brightness-supported: SliderPanel {
                 icon: Icons.wb-sunny;
                 icon-tint: Theme.e450;
                 title: T.tr("brillo_por_software");

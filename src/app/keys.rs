@@ -189,6 +189,15 @@ fn save_combo(name: &str, combo: hotkeys::Combo) {
     });
 }
 
+/// Los atajos de Enfoque y Prisma solo donde existen.
+fn shown_here(name: &str) -> bool {
+    match name {
+        "toggleBand" | "toggleVeil" => platform::has_focus(),
+        "prismaDark" | "prismaGray" => platform::HAS_PRISMA,
+        _ => true,
+    }
+}
+
 pub(super) fn shutdown() {
     WATCH.with(|w| w.borrow_mut().take());
     platform::register_hotkeys(&[]);
@@ -200,7 +209,7 @@ fn register_all() {
             .iter()
             .enumerate()
             // Los de Enfoque y Prisma solo donde existen.
-            .filter(|(_, n)| platform::HAS_FX || !matches!(**n, "toggleBand" | "toggleVeil" | "prismaDark" | "prismaGray"))
+            .filter(|(_, n)| shown_here(n))
             .filter_map(|(i, n)| hotkeys::parse(s.cfg.hotkeys.get(n)).map(|c| (i as i32 + 1, c.mods, c.vk, *n)))
             .collect()
     });
@@ -353,13 +362,14 @@ pub(super) fn push() {
     let k = app.global::<Keys>();
     let failed = FAILED.with(|f| f.borrow().clone());
     let (hk, rules, notice) = with(|s| (s.cfg.hotkeys.clone(), s.cfg.rules.clone(), s.rule_override));
+    k.set_hotkeys_available(platform::has_desktop_access());
+    k.set_rules_available(platform::has_desktop_access());
     k.set_brightness_step(hk.brightness_step);
     k.set_kelvin_step(hk.kelvin_step);
     // Sin Enfoque ni Prisma en este sistema, sus atajos no se muestran.
-    let fx = ["toggleBand", "toggleVeil", "prismaDark", "prismaGray"];
     let rows: Vec<HotkeyRow> = HotkeyConfig::NAMES
         .iter()
-        .filter(|n| platform::HAS_FX || !fx.contains(n))
+        .filter(|n| shown_here(n))
         .map(|n| hotkey_row(n, &hk, &failed))
         .collect();
     // Reemplazar la lista mientras se graba un atajo le quitaría el foco: solo si cambió.
