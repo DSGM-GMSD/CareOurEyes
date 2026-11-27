@@ -1,6 +1,6 @@
 [package]
 name = "careoureyes"
-version = "2.0.0-beta.1"
+version = "2.0.0-beta.2"
 edition = "2021"
 description = "CareOurEyes: software brightness, color temperature and eye-care profiles"
 license = "GPL-3.0-only"

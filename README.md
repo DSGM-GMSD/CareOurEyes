@@ -203,11 +203,11 @@ cuando se sube una etiqueta `v*`: comprueba que coincide con la versión de
 3. Crea la etiqueta anotada sobre ese commit y súbela:
 
    ```bash
-   git tag -a v2.0.0-beta.2 -m "CareOurEyes v2.0.0-beta.2"
-   git push origin v2.0.0-beta.2
+   git tag -a v2.0.0-beta.3 -m "CareOurEyes v2.0.0-beta.3"
+   git push origin v2.0.0-beta.3
    ```
 
-Una versión con guion (`-beta.2`, `-rc.1`) se publica como pre-release.
+Una versión con guion (`-beta.3`, `-rc.1`) se publica como pre-release.
 
 Configuración del usuario: `%APPDATA%\CareOurEyes\config.json`.
 
